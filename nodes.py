@@ -16,121 +16,12 @@ import numpy as np
 from safetensors.torch import load_file
 from einops import rearrange
 
-from diffusers import (
-    DiffusionPipeline, 
-    StableDiffusionPipeline
-)
-
-from diffusers import (
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    DDIMScheduler,
-    DDIMParallelScheduler,
-    LCMScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler,
-)
-
 from huggingface_hub import snapshot_download
 
-from plyfile import PlyData
 import trimesh
 from PIL import Image
-
-from .mesh_processer.mesh import Mesh
-from .mesh_processer.mesh_utils import (
-    ply_to_points_cloud, 
-    get_target_axis_and_scale, 
-    switch_ply_axis_and_scale, 
-    switch_mesh_axis_and_scale, 
-    calculate_max_sh_degree_from_gs_ply,
-    marching_cubes_density_to_mesh,
-    color_func_to_albedo,
-    interpolate_texture_map_attr,
-    decimate_mesh,
-)
-
-from FlexiCubes.flexicubes_trainer import FlexiCubesTrainer
-from DiffRastMesh.diff_mesh import DiffMesh, DiffMeshCameraController
-from DiffRastMesh.diff_mesh import DiffRastRenderer
-from GaussianSplatting.main_3DGS import GaussianSplatting3D, GaussianSplattingCameraController, GSParams
-from GaussianSplatting.main_3DGS_renderer import GaussianSplattingRenderer
-from NeRF.Instant_NGP import InstantNGP
-
-from TriplaneGaussian.triplane_gaussian_transformers import TGS
-from TriplaneGaussian.utils.config import ExperimentConfig as ExperimentConfigTGS, load_config as load_config_tgs
-from TriplaneGaussian.data import CustomImageOrbitDataset
-from TriplaneGaussian.utils.misc import todevice, get_device
-from LGM.core.options import config_defaults
-from LGM.mvdream.pipeline_mvdream import MVDreamPipeline
-from LGM.large_multiview_gaussian_model import LargeMultiviewGaussianModel
-from LGM.nerf_marching_cubes_converter import GSConverterNeRFMarchingCubes
-from TripoSR.system import TSR
-from StableFast3D.sf3d import utils as sf3d_utils
-from StableFast3D.sf3d.system import SF3D
-from InstantMesh.utils.camera_util import oribt_camera_poses_to_input_cameras
-from CRM.model.crm.model import ConvolutionalReconstructionModel
-from CRM.model.crm.sampler import CRMSampler
-from Wonder3D.pipelines.pipeline_mvdiffusion_image import MVDiffusionImagePipeline
-from Wonder3D.data.single_image_dataset import SingleImageDataset as MVSingleImageDataset
-from Wonder3D.utils.misc import load_config as load_config_wonder3d
-from Zero123Plus.pipeline import Zero123PlusPipeline
-from Era3D.mvdiffusion.pipelines.pipeline_mvdiffusion_unclip import StableUnCLIPImg2ImgPipeline
-from Era3D.mvdiffusion.data.single_image_dataset import SingleImageDataset as Era3DSingleImageDataset
-from Era3D.utils.misc import load_config as load_config_era3d
-from Unique3D.custum_3d_diffusion.custum_pipeline.unifield_pipeline_img2mvimg import StableDiffusionImage2MVCustomPipeline
-from Unique3D.custum_3d_diffusion.custum_pipeline.unifield_pipeline_img2img import StableDiffusionImageCustomPipeline
-from Unique3D.scripts.mesh_init import fast_geo
-from Unique3D.scripts.utils import from_py3d_mesh, to_py3d_mesh, to_pyml_mesh, simple_clean_mesh
-from Unique3D.scripts.project_mesh import multiview_color_projection, multiview_color_projection_texture, get_cameras_list, get_orbit_cameras_list
-from Unique3D.mesh_reconstruction.recon import reconstruct_stage1
-from Unique3D.mesh_reconstruction.refine import run_mesh_refine
-from CharacterGen.character_inference import Inference2D_API, Inference3D_API
-from CharacterGen.Stage_3D.lrm.utils.config import load_config as load_config_cg3d
-import craftsman
-from craftsman.systems.base import BaseSystem
-from craftsman.utils.config import ExperimentConfig as ExperimentConfigCraftsman, load_config as load_config_craftsman
-from CRM_T2I_V2.model.crm.sampler import CRMSamplerV2
-from CRM_T2I_V2.model.t2i_adapter_v2 import T2IAdapterV2
-from CRM_T2I_V3.model.crm.sampler import CRMSamplerV3
-from Hunyuan3D_V1.mvd.hunyuan3d_mvd_std_pipeline import HunYuan3D_MVD_Std_Pipeline
-from Hunyuan3D_V1.mvd.hunyuan3d_mvd_lite_pipeline import Hunyuan3D_MVD_Lite_Pipeline
-from Hunyuan3D_V1.infer import Views2Mesh
-from Hunyuan3D_V2.hy3dgen.shapegen import FaceReducer, FloaterRemover, DegenerateFaceRemover, Hunyuan3DDiTFlowMatchingPipeline
-from Hunyuan3D_V2.hy3dgen.texgen import Hunyuan3DPaintPipeline
-from Hunyuan3D_V2.hy3dgen.rembg import BackgroundRemover
-from TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline
-from TRELLIS.trellis.utils import postprocessing_utils
-from TripoSG.pipelines.pipeline_triposg import TripoSGPipeline
-from TripoSG.pipelines.pipeline_triposg_scribble import TripoSGScribblePipeline
-from Stable3DGen.pipeline_builders import StableGenPipelineBuilder
-from MV_Adapter.mvadapter_node_utils import (
-        prepare_pipeline as mvadapter_prepare_pipeline,
-        run_pipeline as mvadapter_run_pipeline, 
-        prepare_tg2mv_pipeline as mvadapter_prepare_tg2mv_pipeline,
-        run_tg2mv_pipeline as mvadapter_run_tg2mv_pipeline,
-        prepare_texture_pipeline as mvadapter_prepare_texture_pipeline,
-        download_texture_checkpoints,
-    )
-from mmgp import offload, profile_type
-from Gen_3D_Modules.Hunyuan3D_2_1 import (
-    FaceReducer_2_1, 
-    Hunyuan3DDiTFlowMatchingPipeline_2_1,
-    export_to_trimesh_2_1,
-    BackgroundRemover_2_1,
-    Hunyuan3DPaintPipeline_2_1,
-    Hunyuan3DPaintConfig_2_1,
-    create_glb_with_pbr_materials_2_1,
-)
-from Gen_3D_Modules.Hunyuan3D_2_1.hy3dpaint.utils.torchvision_fix import apply_fix
-apply_fix()
-from Gen_3D_Modules.PartCrafter.partcrafter_src.pipelines.pipeline_partcrafter import PartCrafterPipeline
-from Gen_3D_Modules.PartCrafter.partcrafter_src.utils.data_utils import get_colored_mesh_composition
-from Gen_3D_Modules.PartCrafter.partcrafter_src.utils.render_utils import explode_mesh
 import zipfile
 
-
-os.environ['SPCONV_ALGO'] = 'native'
 
 from .shared_utils.image_utils import (
     prepare_torch_img, torch_imgs_to_pils, troch_image_dilate, 
@@ -143,33 +34,36 @@ from .shared_utils.camera_utils import (
 from .shared_utils.log_utils import cstr
 from .shared_utils.common_utils import parse_save_filename, get_list_filenames, resume_or_download_model_from_hf
 
-DIFFUSERS_PIPE_DICT = OrderedDict([
-    ("MVDreamPipeline", MVDreamPipeline),
-    ("Wonder3DMVDiffusionPipeline", MVDiffusionImagePipeline),
-    ("Zero123PlusPipeline", Zero123PlusPipeline),
-    ("DiffusionPipeline", DiffusionPipeline),
-    ("StableDiffusionPipeline", StableDiffusionPipeline),
-    ("Era3DPipeline", StableUnCLIPImg2ImgPipeline),
-    ("Unique3DImage2MVCustomPipeline", StableDiffusionImage2MVCustomPipeline),
-    ("Unique3DImageCustomPipeline", StableDiffusionImageCustomPipeline),
-    ("HunYuan3DMVDStdPipeline", HunYuan3D_MVD_Std_Pipeline),
-    ("Hunyuan3DMVDLitePipeline", Hunyuan3D_MVD_Lite_Pipeline),
-    ("Hunyuan3DDiTFlowMatchingPipeline", Hunyuan3DDiTFlowMatchingPipeline),
-    ("Hunyuan3DPaintPipeline", Hunyuan3DPaintPipeline),
-    ("TripoSGPipeline", TripoSGPipeline),
-    ("TripoSGScribblePipeline", TripoSGScribblePipeline),
-])
+DIFFUSERS_PIPE_NAMES = [
+    "MVDreamPipeline",
+    "Wonder3DMVDiffusionPipeline",
+    "Zero123PlusPipeline",
+    "DiffusionPipeline",
+    "StableDiffusionPipeline",
+    "Era3DPipeline",
+    "Unique3DImage2MVCustomPipeline",
+    "Unique3DImageCustomPipeline",
+    "HunYuan3DMVDStdPipeline",
+    "Hunyuan3DMVDLitePipeline",
+    "Hunyuan3DDiTFlowMatchingPipeline",
+    "Hunyuan3DPaintPipeline",
+    "TripoSGPipeline",
+    "TripoSGScribblePipeline",
+]
 
-DIFFUSERS_SCHEDULER_DICT = OrderedDict([
-    ("EulerAncestralDiscreteScheduler", EulerAncestralDiscreteScheduler),
-    ("Wonder3DMVDiffusionPipeline", MVDiffusionImagePipeline),
-    ("EulerDiscreteScheduler,", EulerDiscreteScheduler),
-    ("DDIMScheduler,", DDIMScheduler),
-    ("DDIMParallelScheduler,", DDIMParallelScheduler),
-    ("LCMScheduler,", LCMScheduler),
-    ("KDPM2AncestralDiscreteScheduler,", KDPM2AncestralDiscreteScheduler),
-    ("KDPM2DiscreteScheduler,", KDPM2DiscreteScheduler),
-])
+DIFFUSERS_SCHEDULER_NAMES = [
+    "EulerAncestralDiscreteScheduler",
+    "Wonder3DMVDiffusionPipeline",
+    "EulerDiscreteScheduler,",
+    "DDIMScheduler,",
+    "DDIMParallelScheduler,",
+    "LCMScheduler,",
+    "KDPM2AncestralDiscreteScheduler,",
+    "KDPM2DiscreteScheduler,",
+]
+
+DIFFUSERS_PIPE_DICT = None
+DIFFUSERS_SCHEDULER_DICT = None
 
 ROOT_PATH = os.path.dirname(os.path.realpath(__file__))
 CKPT_ROOT_PATH = os.path.join(ROOT_PATH, "Checkpoints")
@@ -207,6 +101,354 @@ DEVICE_STR = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = torch.device(DEVICE_STR)
 
 HF_DOWNLOAD_IGNORE = ["*.yaml", "*.json", "*.py", ".png", ".jpg", ".gif"]
+
+_MESH_CORE_LOADED = False
+_MESH_UTILS_LOADED = False
+_DIFFRAST_LOADED = False
+_GAUSSIAN_SPLATTING_LOADED = False
+_GENERATION_MODULES_LOADED = False
+
+
+def _load_mesh_core():
+    global _MESH_CORE_LOADED, PlyData, Mesh
+    if _MESH_CORE_LOADED:
+        return
+
+    from plyfile import PlyData as _PlyData
+    from .mesh_processer.mesh import Mesh as _Mesh
+
+    PlyData = _PlyData
+    Mesh = _Mesh
+    _MESH_CORE_LOADED = True
+
+
+def _load_mesh_utils():
+    global _MESH_UTILS_LOADED
+    global ply_to_points_cloud, get_target_axis_and_scale
+    global switch_ply_axis_and_scale, switch_mesh_axis_and_scale
+    global calculate_max_sh_degree_from_gs_ply, marching_cubes_density_to_mesh
+    global color_func_to_albedo, interpolate_texture_map_attr, decimate_mesh
+
+    if _MESH_UTILS_LOADED:
+        return
+
+    from .mesh_processer.mesh_utils import (
+        ply_to_points_cloud as _ply_to_points_cloud,
+        get_target_axis_and_scale as _get_target_axis_and_scale,
+        switch_ply_axis_and_scale as _switch_ply_axis_and_scale,
+        switch_mesh_axis_and_scale as _switch_mesh_axis_and_scale,
+        calculate_max_sh_degree_from_gs_ply as _calculate_max_sh_degree_from_gs_ply,
+        marching_cubes_density_to_mesh as _marching_cubes_density_to_mesh,
+        color_func_to_albedo as _color_func_to_albedo,
+        interpolate_texture_map_attr as _interpolate_texture_map_attr,
+        decimate_mesh as _decimate_mesh,
+    )
+
+    ply_to_points_cloud = _ply_to_points_cloud
+    get_target_axis_and_scale = _get_target_axis_and_scale
+    switch_ply_axis_and_scale = _switch_ply_axis_and_scale
+    switch_mesh_axis_and_scale = _switch_mesh_axis_and_scale
+    calculate_max_sh_degree_from_gs_ply = _calculate_max_sh_degree_from_gs_ply
+    marching_cubes_density_to_mesh = _marching_cubes_density_to_mesh
+    color_func_to_albedo = _color_func_to_albedo
+    interpolate_texture_map_attr = _interpolate_texture_map_attr
+    decimate_mesh = _decimate_mesh
+    _MESH_UTILS_LOADED = True
+
+
+def _load_diffrast():
+    global _DIFFRAST_LOADED, DiffMesh, DiffMeshCameraController, DiffRastRenderer
+    if _DIFFRAST_LOADED:
+        return
+
+    from DiffRastMesh.diff_mesh import DiffMesh as _DiffMesh
+    from DiffRastMesh.diff_mesh import DiffMeshCameraController as _DiffMeshCameraController
+    from DiffRastMesh.diff_mesh import DiffRastRenderer as _DiffRastRenderer
+
+    DiffMesh = _DiffMesh
+    DiffMeshCameraController = _DiffMeshCameraController
+    DiffRastRenderer = _DiffRastRenderer
+    _DIFFRAST_LOADED = True
+
+
+def _load_gaussian_splatting():
+    global _GAUSSIAN_SPLATTING_LOADED
+    global GaussianSplatting3D, GaussianSplattingCameraController, GSParams, GaussianSplattingRenderer
+
+    if _GAUSSIAN_SPLATTING_LOADED:
+        return
+
+    from GaussianSplatting.main_3DGS import (
+        GaussianSplatting3D as _GaussianSplatting3D,
+        GaussianSplattingCameraController as _GaussianSplattingCameraController,
+        GSParams as _GSParams,
+    )
+    from GaussianSplatting.main_3DGS_renderer import GaussianSplattingRenderer as _GaussianSplattingRenderer
+
+    GaussianSplatting3D = _GaussianSplatting3D
+    GaussianSplattingCameraController = _GaussianSplattingCameraController
+    GSParams = _GSParams
+    GaussianSplattingRenderer = _GaussianSplattingRenderer
+    _GAUSSIAN_SPLATTING_LOADED = True
+
+
+def _load_generation_modules():
+    global _GENERATION_MODULES_LOADED
+    global FlexiCubesTrainer, InstantNGP, TGS, ExperimentConfigTGS, load_config_tgs
+    global CustomImageOrbitDataset, todevice, get_device, config_defaults, MVDreamPipeline
+    global LargeMultiviewGaussianModel, GSConverterNeRFMarchingCubes, TSR, sf3d_utils, SF3D
+    global oribt_camera_poses_to_input_cameras, ConvolutionalReconstructionModel, CRMSampler
+    global MVDiffusionImagePipeline, MVSingleImageDataset, load_config_wonder3d, Zero123PlusPipeline
+    global StableUnCLIPImg2ImgPipeline, Era3DSingleImageDataset, load_config_era3d
+    global StableDiffusionImage2MVCustomPipeline, StableDiffusionImageCustomPipeline
+    global fast_geo, from_py3d_mesh, to_py3d_mesh, to_pyml_mesh, simple_clean_mesh
+    global multiview_color_projection, multiview_color_projection_texture, get_cameras_list, get_orbit_cameras_list
+    global reconstruct_stage1, run_mesh_refine, Inference2D_API, Inference3D_API, load_config_cg3d
+    global craftsman, BaseSystem, ExperimentConfigCraftsman, load_config_craftsman
+    global CRMSamplerV2, T2IAdapterV2, CRMSamplerV3, HunYuan3D_MVD_Std_Pipeline, Hunyuan3DMVDLitePipeline
+    global Views2Mesh, FaceReducer, FloaterRemover, DegenerateFaceRemover, Hunyuan3DDiTFlowMatchingPipeline
+    global Hunyuan3DPaintPipeline, BackgroundRemover, TrellisImageTo3DPipeline, postprocessing_utils
+    global TripoSGPipeline, TripoSGScribblePipeline, StableGenPipelineBuilder
+    global mvadapter_prepare_pipeline, mvadapter_run_pipeline, mvadapter_prepare_tg2mv_pipeline
+    global mvadapter_run_tg2mv_pipeline, mvadapter_prepare_texture_pipeline, download_texture_checkpoints
+    global offload, profile_type, FaceReducer_2_1, Hunyuan3DDiTFlowMatchingPipeline_2_1
+    global export_to_trimesh_2_1, BackgroundRemover_2_1, Hunyuan3DPaintPipeline_2_1
+    global Hunyuan3DPaintConfig_2_1, create_glb_with_pbr_materials_2_1, PartCrafterPipeline
+    global get_colored_mesh_composition, explode_mesh
+
+    if _GENERATION_MODULES_LOADED:
+        return
+
+    os.environ['SPCONV_ALGO'] = 'native'
+
+    from FlexiCubes.flexicubes_trainer import FlexiCubesTrainer as _FlexiCubesTrainer
+    from NeRF.Instant_NGP import InstantNGP as _InstantNGP
+    from TriplaneGaussian.triplane_gaussian_transformers import TGS as _TGS
+    from TriplaneGaussian.utils.config import ExperimentConfig as _ExperimentConfigTGS, load_config as _load_config_tgs
+    from TriplaneGaussian.data import CustomImageOrbitDataset as _CustomImageOrbitDataset
+    from TriplaneGaussian.utils.misc import todevice as _todevice, get_device as _get_device
+    from LGM.core.options import config_defaults as _config_defaults
+    from LGM.mvdream.pipeline_mvdream import MVDreamPipeline as _MVDreamPipeline
+    from LGM.large_multiview_gaussian_model import LargeMultiviewGaussianModel as _LargeMultiviewGaussianModel
+    from LGM.nerf_marching_cubes_converter import GSConverterNeRFMarchingCubes as _GSConverterNeRFMarchingCubes
+    from TripoSR.system import TSR as _TSR
+    from StableFast3D.sf3d import utils as _sf3d_utils
+    from StableFast3D.sf3d.system import SF3D as _SF3D
+    from InstantMesh.utils.camera_util import oribt_camera_poses_to_input_cameras as _oribt_camera_poses_to_input_cameras
+    from CRM.model.crm.model import ConvolutionalReconstructionModel as _ConvolutionalReconstructionModel
+    from CRM.model.crm.sampler import CRMSampler as _CRMSampler
+    from Wonder3D.pipelines.pipeline_mvdiffusion_image import MVDiffusionImagePipeline as _MVDiffusionImagePipeline
+    from Wonder3D.data.single_image_dataset import SingleImageDataset as _MVSingleImageDataset
+    from Wonder3D.utils.misc import load_config as _load_config_wonder3d
+    from Zero123Plus.pipeline import Zero123PlusPipeline as _Zero123PlusPipeline
+    from Era3D.mvdiffusion.pipelines.pipeline_mvdiffusion_unclip import StableUnCLIPImg2ImgPipeline as _StableUnCLIPImg2ImgPipeline
+    from Era3D.mvdiffusion.data.single_image_dataset import SingleImageDataset as _Era3DSingleImageDataset
+    from Era3D.utils.misc import load_config as _load_config_era3d
+    from Unique3D.custum_3d_diffusion.custum_pipeline.unifield_pipeline_img2mvimg import StableDiffusionImage2MVCustomPipeline as _StableDiffusionImage2MVCustomPipeline
+    from Unique3D.custum_3d_diffusion.custum_pipeline.unifield_pipeline_img2img import StableDiffusionImageCustomPipeline as _StableDiffusionImageCustomPipeline
+    from Unique3D.scripts.mesh_init import fast_geo as _fast_geo
+    from Unique3D.scripts.utils import (
+        from_py3d_mesh as _from_py3d_mesh,
+        to_py3d_mesh as _to_py3d_mesh,
+        to_pyml_mesh as _to_pyml_mesh,
+        simple_clean_mesh as _simple_clean_mesh,
+    )
+    from Unique3D.scripts.project_mesh import (
+        multiview_color_projection as _multiview_color_projection,
+        multiview_color_projection_texture as _multiview_color_projection_texture,
+        get_cameras_list as _get_cameras_list,
+        get_orbit_cameras_list as _get_orbit_cameras_list,
+    )
+    from Unique3D.mesh_reconstruction.recon import reconstruct_stage1 as _reconstruct_stage1
+    from Unique3D.mesh_reconstruction.refine import run_mesh_refine as _run_mesh_refine
+    from CharacterGen.character_inference import Inference2D_API as _Inference2D_API, Inference3D_API as _Inference3D_API
+    from CharacterGen.Stage_3D.lrm.utils.config import load_config as _load_config_cg3d
+    import craftsman as _craftsman
+    from craftsman.systems.base import BaseSystem as _BaseSystem
+    from craftsman.utils.config import ExperimentConfig as _ExperimentConfigCraftsman, load_config as _load_config_craftsman
+    from CRM_T2I_V2.model.crm.sampler import CRMSamplerV2 as _CRMSamplerV2
+    from CRM_T2I_V2.model.t2i_adapter_v2 import T2IAdapterV2 as _T2IAdapterV2
+    from CRM_T2I_V3.model.crm.sampler import CRMSamplerV3 as _CRMSamplerV3
+    from Hunyuan3D_V1.mvd.hunyuan3d_mvd_std_pipeline import HunYuan3D_MVD_Std_Pipeline as _HunYuan3D_MVD_Std_Pipeline
+    from Hunyuan3D_V1.mvd.hunyuan3d_mvd_lite_pipeline import Hunyuan3D_MVD_Lite_Pipeline as _Hunyuan3DMVDLitePipeline
+    from Hunyuan3D_V1.infer import Views2Mesh as _Views2Mesh
+    from Hunyuan3D_V2.hy3dgen.shapegen import (
+        FaceReducer as _FaceReducer,
+        FloaterRemover as _FloaterRemover,
+        DegenerateFaceRemover as _DegenerateFaceRemover,
+        Hunyuan3DDiTFlowMatchingPipeline as _Hunyuan3DDiTFlowMatchingPipeline,
+    )
+    from Hunyuan3D_V2.hy3dgen.texgen import Hunyuan3DPaintPipeline as _Hunyuan3DPaintPipeline
+    from Hunyuan3D_V2.hy3dgen.rembg import BackgroundRemover as _BackgroundRemover
+    from TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline as _TrellisImageTo3DPipeline
+    from TRELLIS.trellis.utils import postprocessing_utils as _postprocessing_utils
+    from TripoSG.pipelines.pipeline_triposg import TripoSGPipeline as _TripoSGPipeline
+    from TripoSG.pipelines.pipeline_triposg_scribble import TripoSGScribblePipeline as _TripoSGScribblePipeline
+    from Stable3DGen.pipeline_builders import StableGenPipelineBuilder as _StableGenPipelineBuilder
+    from MV_Adapter.mvadapter_node_utils import (
+        prepare_pipeline as _mvadapter_prepare_pipeline,
+        run_pipeline as _mvadapter_run_pipeline,
+        prepare_tg2mv_pipeline as _mvadapter_prepare_tg2mv_pipeline,
+        run_tg2mv_pipeline as _mvadapter_run_tg2mv_pipeline,
+        prepare_texture_pipeline as _mvadapter_prepare_texture_pipeline,
+        download_texture_checkpoints as _download_texture_checkpoints,
+    )
+    from mmgp import offload as _offload, profile_type as _profile_type
+    from Gen_3D_Modules.Hunyuan3D_2_1 import (
+        FaceReducer_2_1 as _FaceReducer_2_1,
+        Hunyuan3DDiTFlowMatchingPipeline_2_1 as _Hunyuan3DDiTFlowMatchingPipeline_2_1,
+        export_to_trimesh_2_1 as _export_to_trimesh_2_1,
+        BackgroundRemover_2_1 as _BackgroundRemover_2_1,
+        Hunyuan3DPaintPipeline_2_1 as _Hunyuan3DPaintPipeline_2_1,
+        Hunyuan3DPaintConfig_2_1 as _Hunyuan3DPaintConfig_2_1,
+        create_glb_with_pbr_materials_2_1 as _create_glb_with_pbr_materials_2_1,
+    )
+    from Gen_3D_Modules.Hunyuan3D_2_1.hy3dpaint.utils.torchvision_fix import apply_fix
+    from Gen_3D_Modules.PartCrafter.partcrafter_src.pipelines.pipeline_partcrafter import PartCrafterPipeline as _PartCrafterPipeline
+    from Gen_3D_Modules.PartCrafter.partcrafter_src.utils.data_utils import get_colored_mesh_composition as _get_colored_mesh_composition
+    from Gen_3D_Modules.PartCrafter.partcrafter_src.utils.render_utils import explode_mesh as _explode_mesh
+
+    apply_fix()
+
+    FlexiCubesTrainer = _FlexiCubesTrainer
+    InstantNGP = _InstantNGP
+    TGS = _TGS
+    ExperimentConfigTGS = _ExperimentConfigTGS
+    load_config_tgs = _load_config_tgs
+    CustomImageOrbitDataset = _CustomImageOrbitDataset
+    todevice = _todevice
+    get_device = _get_device
+    config_defaults = _config_defaults
+    MVDreamPipeline = _MVDreamPipeline
+    LargeMultiviewGaussianModel = _LargeMultiviewGaussianModel
+    GSConverterNeRFMarchingCubes = _GSConverterNeRFMarchingCubes
+    TSR = _TSR
+    sf3d_utils = _sf3d_utils
+    SF3D = _SF3D
+    oribt_camera_poses_to_input_cameras = _oribt_camera_poses_to_input_cameras
+    ConvolutionalReconstructionModel = _ConvolutionalReconstructionModel
+    CRMSampler = _CRMSampler
+    MVDiffusionImagePipeline = _MVDiffusionImagePipeline
+    MVSingleImageDataset = _MVSingleImageDataset
+    load_config_wonder3d = _load_config_wonder3d
+    Zero123PlusPipeline = _Zero123PlusPipeline
+    StableUnCLIPImg2ImgPipeline = _StableUnCLIPImg2ImgPipeline
+    Era3DSingleImageDataset = _Era3DSingleImageDataset
+    load_config_era3d = _load_config_era3d
+    StableDiffusionImage2MVCustomPipeline = _StableDiffusionImage2MVCustomPipeline
+    StableDiffusionImageCustomPipeline = _StableDiffusionImageCustomPipeline
+    fast_geo = _fast_geo
+    from_py3d_mesh = _from_py3d_mesh
+    to_py3d_mesh = _to_py3d_mesh
+    to_pyml_mesh = _to_pyml_mesh
+    simple_clean_mesh = _simple_clean_mesh
+    multiview_color_projection = _multiview_color_projection
+    multiview_color_projection_texture = _multiview_color_projection_texture
+    get_cameras_list = _get_cameras_list
+    get_orbit_cameras_list = _get_orbit_cameras_list
+    reconstruct_stage1 = _reconstruct_stage1
+    run_mesh_refine = _run_mesh_refine
+    Inference2D_API = _Inference2D_API
+    Inference3D_API = _Inference3D_API
+    load_config_cg3d = _load_config_cg3d
+    craftsman = _craftsman
+    BaseSystem = _BaseSystem
+    ExperimentConfigCraftsman = _ExperimentConfigCraftsman
+    load_config_craftsman = _load_config_craftsman
+    CRMSamplerV2 = _CRMSamplerV2
+    T2IAdapterV2 = _T2IAdapterV2
+    CRMSamplerV3 = _CRMSamplerV3
+    HunYuan3D_MVD_Std_Pipeline = _HunYuan3D_MVD_Std_Pipeline
+    Hunyuan3DMVDLitePipeline = _Hunyuan3DMVDLitePipeline
+    Views2Mesh = _Views2Mesh
+    FaceReducer = _FaceReducer
+    FloaterRemover = _FloaterRemover
+    DegenerateFaceRemover = _DegenerateFaceRemover
+    Hunyuan3DDiTFlowMatchingPipeline = _Hunyuan3DDiTFlowMatchingPipeline
+    Hunyuan3DPaintPipeline = _Hunyuan3DPaintPipeline
+    BackgroundRemover = _BackgroundRemover
+    TrellisImageTo3DPipeline = _TrellisImageTo3DPipeline
+    postprocessing_utils = _postprocessing_utils
+    TripoSGPipeline = _TripoSGPipeline
+    TripoSGScribblePipeline = _TripoSGScribblePipeline
+    StableGenPipelineBuilder = _StableGenPipelineBuilder
+    mvadapter_prepare_pipeline = _mvadapter_prepare_pipeline
+    mvadapter_run_pipeline = _mvadapter_run_pipeline
+    mvadapter_prepare_tg2mv_pipeline = _mvadapter_prepare_tg2mv_pipeline
+    mvadapter_run_tg2mv_pipeline = _mvadapter_run_tg2mv_pipeline
+    mvadapter_prepare_texture_pipeline = _mvadapter_prepare_texture_pipeline
+    download_texture_checkpoints = _download_texture_checkpoints
+    offload = _offload
+    profile_type = _profile_type
+    FaceReducer_2_1 = _FaceReducer_2_1
+    Hunyuan3DDiTFlowMatchingPipeline_2_1 = _Hunyuan3DDiTFlowMatchingPipeline_2_1
+    export_to_trimesh_2_1 = _export_to_trimesh_2_1
+    BackgroundRemover_2_1 = _BackgroundRemover_2_1
+    Hunyuan3DPaintPipeline_2_1 = _Hunyuan3DPaintPipeline_2_1
+    Hunyuan3DPaintConfig_2_1 = _Hunyuan3DPaintConfig_2_1
+    create_glb_with_pbr_materials_2_1 = _create_glb_with_pbr_materials_2_1
+    PartCrafterPipeline = _PartCrafterPipeline
+    get_colored_mesh_composition = _get_colored_mesh_composition
+    explode_mesh = _explode_mesh
+    _GENERATION_MODULES_LOADED = True
+
+
+def _get_diffusers_pipe_dict():
+    global DIFFUSERS_PIPE_DICT
+
+    if DIFFUSERS_PIPE_DICT is not None:
+        return DIFFUSERS_PIPE_DICT
+
+    _load_generation_modules()
+    from diffusers import DiffusionPipeline, StableDiffusionPipeline
+
+    DIFFUSERS_PIPE_DICT = OrderedDict([
+        ("MVDreamPipeline", MVDreamPipeline),
+        ("Wonder3DMVDiffusionPipeline", MVDiffusionImagePipeline),
+        ("Zero123PlusPipeline", Zero123PlusPipeline),
+        ("DiffusionPipeline", DiffusionPipeline),
+        ("StableDiffusionPipeline", StableDiffusionPipeline),
+        ("Era3DPipeline", StableUnCLIPImg2ImgPipeline),
+        ("Unique3DImage2MVCustomPipeline", StableDiffusionImage2MVCustomPipeline),
+        ("Unique3DImageCustomPipeline", StableDiffusionImageCustomPipeline),
+        ("HunYuan3DMVDStdPipeline", HunYuan3D_MVD_Std_Pipeline),
+        ("Hunyuan3DMVDLitePipeline", Hunyuan3DMVDLitePipeline),
+        ("Hunyuan3DDiTFlowMatchingPipeline", Hunyuan3DDiTFlowMatchingPipeline),
+        ("Hunyuan3DPaintPipeline", Hunyuan3DPaintPipeline),
+        ("TripoSGPipeline", TripoSGPipeline),
+        ("TripoSGScribblePipeline", TripoSGScribblePipeline),
+    ])
+    return DIFFUSERS_PIPE_DICT
+
+
+def _get_diffusers_scheduler_dict():
+    global DIFFUSERS_SCHEDULER_DICT
+
+    if DIFFUSERS_SCHEDULER_DICT is not None:
+        return DIFFUSERS_SCHEDULER_DICT
+
+    _load_generation_modules()
+    from diffusers import (
+        EulerAncestralDiscreteScheduler,
+        EulerDiscreteScheduler,
+        DDIMScheduler,
+        DDIMParallelScheduler,
+        LCMScheduler,
+        KDPM2AncestralDiscreteScheduler,
+        KDPM2DiscreteScheduler,
+    )
+
+    DIFFUSERS_SCHEDULER_DICT = OrderedDict([
+        ("EulerAncestralDiscreteScheduler", EulerAncestralDiscreteScheduler),
+        ("Wonder3DMVDiffusionPipeline", MVDiffusionImagePipeline),
+        ("EulerDiscreteScheduler,", EulerDiscreteScheduler),
+        ("DDIMScheduler,", DDIMScheduler),
+        ("DDIMParallelScheduler,", DDIMParallelScheduler),
+        ("LCMScheduler,", LCMScheduler),
+        ("KDPM2AncestralDiscreteScheduler,", KDPM2AncestralDiscreteScheduler),
+        ("KDPM2DiscreteScheduler,", KDPM2DiscreteScheduler),
+    ])
+    return DIFFUSERS_SCHEDULER_DICT
 
 
 class Preview_3DGS:
@@ -304,6 +546,7 @@ class Load_3D_Mesh:
     CATEGORY = "Comfy3D/Import|Export"
     
     def load_mesh(self, mesh_file_path, resize, renormal, retex, optimizable, clean, resize_bound):
+        _load_mesh_core()
         mesh = None
         
         if not os.path.isabs(mesh_file_path):
@@ -340,6 +583,7 @@ class Load_3DGS:
     CATEGORY = "Comfy3D/Import|Export"
     
     def load_gs(self, gs_file_path):
+        _load_mesh_core()
         gs_ply = None
         
         if not os.path.isabs(gs_file_path):
@@ -639,6 +883,8 @@ class Fast_Clean_Mesh:
 
     def clean_mesh(self, mesh, apply_smooth, smooth_step, apply_sub_divide, sub_divide_threshold):
 
+        _load_generation_modules()
+        _load_mesh_core()
         meshes = simple_clean_mesh(to_pyml_mesh(mesh.v, mesh.f), apply_smooth=apply_smooth, stepsmoothnum=smooth_step, apply_sub_divide=apply_sub_divide, sub_divide_threshold=sub_divide_threshold).to(DEVICE)
         vertices, faces, _ = from_py3d_mesh(meshes)
 
@@ -668,6 +914,7 @@ class Decimate_Mesh:
     CATEGORY = "Comfy3D/Preprocessor"
 
     def process_mesh(self, mesh, target, remesh, optimalplacement):
+        _load_mesh_utils()
         vertices, faces = decimate_mesh(mesh.v.detach().cpu().numpy(), mesh.f.detach().cpu().numpy(), target, remesh, optimalplacement)
         mesh.v, mesh.f = torch.from_numpy(vertices).to(DEVICE), torch.from_numpy(faces).to(torch.int64).to(DEVICE)
         mesh.auto_normal()
@@ -695,6 +942,7 @@ class Switch_3DGS_Axis:
     CATEGORY = "Comfy3D/Preprocessor"
     
     def switch_axis_and_scale(self, gs_ply, axis_x_to, axis_y_to, axis_z_to):
+        _load_mesh_utils()
         switched_gs_ply = None
         if axis_x_to[1] != axis_y_to[1] and axis_x_to[1] != axis_z_to[1] and axis_y_to[1] != axis_z_to[1]:
             target_axis, target_scale, coordinate_invert_count = get_target_axis_and_scale([axis_x_to, axis_y_to, axis_z_to])
@@ -729,6 +977,7 @@ class Switch_Mesh_Axis:
     
     def switch_axis_and_scale(self, mesh, axis_x_to, axis_y_to, axis_z_to, flip_normal, scale):
         
+        _load_mesh_utils()
         switched_mesh = None
         
         if axis_x_to[1] != axis_y_to[1] and axis_x_to[1] != axis_z_to[1] and axis_y_to[1] != axis_z_to[1]:
@@ -760,6 +1009,7 @@ class Convert_3DGS_To_Pointcloud:
     
     def convert_gs_ply(self, gs_ply):
         
+        _load_mesh_utils()
         points_cloud = ply_to_points_cloud(gs_ply)
         
         return (points_cloud, )
@@ -1063,6 +1313,8 @@ class Mesh_Orbit_Renderer:
         render_normal=False,
     ):
         
+        _load_mesh_core()
+        _load_diffrast()
         renderer = DiffRastRenderer(mesh, force_cuda_rasterize)
         
         optional_render_types = []
@@ -1139,6 +1391,8 @@ class Gaussian_Splatting_Orbit_Renderer:
         render_background_color_b,
     ):
         
+        _load_mesh_utils()
+        _load_gaussian_splatting()
         sh_degree, _ = calculate_max_sh_degree_from_gs_ply(gs_ply)
         renderer = GaussianSplattingRenderer(sh_degree=sh_degree)
         renderer.initialize(gs_ply)
@@ -1249,6 +1503,7 @@ class Gaussian_Splatting_3D:
         mesh_to_initialize_gaussian=None,
     ):
         
+        _load_gaussian_splatting()
         gs_ply = None
         
         ref_imgs_num = len(reference_images)
@@ -1371,6 +1626,7 @@ class Fitting_Mesh_With_Multiview_Images:
         force_cuda_rasterize,
     ):
         
+        _load_diffrast()
         if mesh.vt is None:
             mesh.auto_uv()
             
@@ -1449,6 +1705,8 @@ class Load_Triplane_Gaussian_Transformers:
     
     def load_TGS(self, model_name):
 
+        _load_generation_modules()
+        _load_mesh_core()
         device = get_device()
 
         cfg: ExperimentConfigTGS = load_config_tgs(self.config_path_abs)
@@ -1488,6 +1746,8 @@ class Triplane_Gaussian_Transformers:
     CATEGORY = "Comfy3D/Algorithm"
     
     def run_TGS(self, reference_image, reference_mask, tgs_model, cam_dist):        
+        _load_generation_modules()
+        _load_mesh_core()
         cfg: ExperimentConfigTGS = load_config_tgs(self.config_path_abs)
 
         cfg.data.cond_camera_distance = cam_dist
@@ -1513,7 +1773,7 @@ class Load_Diffusers_Pipeline:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "diffusers_pipeline_name": (list(DIFFUSERS_PIPE_DICT.keys()),),
+                "diffusers_pipeline_name": (DIFFUSERS_PIPE_NAMES,),
                 "repo_id": ("STRING", {"default": "ashawkey/imagedream-ipmv-diffusers", "multiline": False}),
                 "custom_pipeline": ("STRING", {"default": "", "multiline": False}),
                 "force_download": ("BOOLEAN", {"default": False}),
@@ -1536,10 +1796,12 @@ class Load_Diffusers_Pipeline:
     def load_diffusers_pipe(self, diffusers_pipeline_name, repo_id, custom_pipeline, force_download, checkpoint_sub_dir="", force_disable_xformers=False):
         
         # resume download pretrained checkpoint
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_download_dir = os.path.join(CKPT_DIFFUSERS_PATH, repo_id)
         snapshot_download(repo_id=repo_id, local_dir=ckpt_download_dir, force_download=force_download, repo_type="model", ignore_patterns=HF_DOWNLOAD_IGNORE)
         
-        diffusers_pipeline_class = DIFFUSERS_PIPE_DICT[diffusers_pipeline_name]
+        diffusers_pipeline_class = _get_diffusers_pipe_dict()[diffusers_pipeline_name]
         
         # load diffusers pipeline
         if not custom_pipeline:
@@ -1563,7 +1825,7 @@ class Set_Diffusers_Pipeline_Scheduler:
         return {
             "required": {
                 "pipe": ("DIFFUSERS_PIPE",),
-                "diffusers_scheduler_name": (list(DIFFUSERS_SCHEDULER_DICT.keys()),),
+                "diffusers_scheduler_name": (DIFFUSERS_SCHEDULER_NAMES,),
             },
         }
 
@@ -1578,7 +1840,9 @@ class Set_Diffusers_Pipeline_Scheduler:
 
     def set_pipe_scheduler(self, pipe, diffusers_scheduler_name):
 
-        diffusers_scheduler_class = DIFFUSERS_SCHEDULER_DICT[diffusers_scheduler_name]
+        _load_generation_modules()
+        _load_mesh_core()
+        diffusers_scheduler_class = _get_diffusers_scheduler_dict()[diffusers_scheduler_name]
 
         pipe.scheduler = diffusers_scheduler_class.from_config(
             pipe.scheduler.config, timestep_spacing='trailing'
@@ -1608,6 +1872,8 @@ class Set_Diffusers_Pipeline_State_Dict:
 
     def set_pipe_state_dict(self, pipe, repo_id, model_name):
 
+        _load_generation_modules()
+        _load_mesh_core()
         checkpoints_dir_abs = os.path.join(CKPT_DIFFUSERS_PATH, repo_id)
         ckpt_path = resume_or_download_model_from_hf(checkpoints_dir_abs, repo_id, model_name, self.__class__.__name__)
 
@@ -1662,6 +1928,8 @@ class Wonder3D_MVDiffusion_Model:
         num_inference_steps, 
     ):
 
+        _load_generation_modules()
+        _load_mesh_core()
         cfg = load_config_wonder3d(self.config_path_abs)
 
         batch = self.prepare_data(reference_image, reference_mask)
@@ -1709,6 +1977,8 @@ class Wonder3D_MVDiffusion_Model:
         return (mv_images, mv_normals, orbit_camposes)
     
     def prepare_data(self, ref_image, ref_mask):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(ref_image, ref_mask)[0]
         dataset = MVSingleImageDataset(fix_cam_pose_dir=self.fix_cam_pose_dir_abs, num_views=6, img_wh=[256, 256], bg_color='white', single_image=single_image)
         return dataset[0]
@@ -1760,6 +2030,8 @@ class MVDream_Model:
         num_inference_steps, 
         elevation,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         if len(reference_image.shape) == 4:
             reference_image = reference_image.squeeze(0)
         if len(reference_mask.shape) == 3:
@@ -1813,6 +2085,8 @@ class Load_Large_Multiview_Gaussian_Model:
     
     def load_LGM(self, model_name, lgb_config):
 
+        _load_generation_modules()
+        _load_mesh_core()
         lgm_model = LargeMultiviewGaussianModel(config_defaults[lgb_config])
         
         ckpt_path = resume_or_download_model_from_hf(self.checkpoints_dir_abs, self.default_repo_id, model_name, self.__class__.__name__)
@@ -1856,6 +2130,8 @@ class Large_Multiview_Gaussian_Model:
     
     @torch.no_grad()
     def run_LGM(self, multiview_images, lgm_model):
+        _load_generation_modules()
+        _load_mesh_core()
         ref_image_torch = prepare_torch_img(multiview_images, lgm_model.opt.input_size, lgm_model.opt.input_size, DEVICE_STR) # [4, 3, 256, 256]
         ref_image_torch = TF.normalize(ref_image_torch, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)
         rays_embeddings = lgm_model.prepare_default_rays(DEVICE_STR)
@@ -1923,6 +2199,8 @@ class Convert_3DGS_to_Mesh_with_NeRF_and_Marching_Cubes:
         texture_resolution,
         force_cuda_rast,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         with torch.inference_mode(False):
             chosen_config = config_defaults[gs_config]
             chosen_config.force_cuda_rast = force_cuda_rast
@@ -1968,6 +2246,8 @@ class Load_TripoSR_Model:
     
     def load_TSR(self, model_name, chunk_size):
         
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_path = resume_or_download_model_from_hf(self.checkpoints_dir_abs, self.default_repo_id, model_name, self.__class__.__name__)
 
         tsr_model = TSR.from_pretrained(
@@ -2008,6 +2288,8 @@ class TripoSR:
 
     @torch.no_grad()
     def run_TSR(self, tsr_model, reference_image, reference_mask, geometry_extract_resolution, marching_cude_threshold):
+        _load_generation_modules()
+        _load_mesh_core()
         mesh = None
         
         image = reference_image[0]
@@ -2026,6 +2308,8 @@ class TripoSR:
     
     # Default model are trained on images with this background 
     def fill_background(self, image):
+        _load_generation_modules()
+        _load_mesh_core()
         image = np.array(image).astype(np.float32) / 255.0
         image = image[:, :, :3] * image[:, :, 3:4] + (1 - image[:, :, 3:4]) * 0.5
         image = Image.fromarray((image * 255.0).astype(np.uint8))
@@ -2062,6 +2346,8 @@ class Load_SF3D_Model:
     
     def load_SF3D(self, model_name):
         
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_path = resume_or_download_model_from_hf(self.checkpoints_dir_abs, self.default_repo_id, model_name, self.__class__.__name__)
 
         sf3d_model = SF3D.from_pretrained(
@@ -2102,6 +2388,8 @@ class StableFast3D:
 
     @torch.no_grad()
     def run_SF3D(self, sf3d_model, reference_image, reference_mask, texture_resolution, remesh_option):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
         
         with torch.autocast(device_type=DEVICE_STR, dtype=WEIGHT_DTYPE):
@@ -2116,6 +2404,8 @@ class StableFast3D:
     
     # Default model are trained on images with this background 
     def create_batch(self, input_image: Image):
+        _load_generation_modules()
+        _load_mesh_core()
         COND_WIDTH = 512
         COND_HEIGHT = 512
         COND_DISTANCE = 1.6
@@ -2186,6 +2476,8 @@ class Load_CRM_MVDiffusion_Model:
     
     def load_CRM(self, model_name, crm_config_path):
         
+        _load_generation_modules()
+        _load_mesh_core()
         from CRM.imagedream.ldm.util import (
             instantiate_from_config,
             get_obj_from_str,
@@ -2256,6 +2548,8 @@ class CRM_Images_MVDiffusion_Model:
         mv_guidance_scale, 
         num_inference_steps, 
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         pixel_img = torch_imgs_to_pils(reference_image, reference_mask)[0]
         pixel_img = CRMSampler.process_pixel_img(pixel_img)
         
@@ -2322,6 +2616,8 @@ class CRM_CCMs_MVDiffusion_Model:
         mv_guidance_scale, 
         num_inference_steps, 
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         pixel_img = torch_imgs_to_pils(reference_image, reference_mask)[0]
         pixel_img = CRMSampler.process_pixel_img(pixel_img)
         
@@ -2369,6 +2665,8 @@ class Load_Convolutional_Reconstruction_Model:
     
     def load_CRM(self, model_name):
         
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_path = resume_or_download_model_from_hf(self.checkpoints_dir_abs, self.default_repo_id, model_name, self.__class__.__name__)
         
         crm_conf = json.load(open(self.config_path_abs))
@@ -2404,6 +2702,8 @@ class Convolutional_Reconstruction_Model:
     @torch.no_grad()
     def run_CRM(self, crm_model, multiview_images, multiview_CCMs):
 
+        _load_generation_modules()
+        _load_mesh_core()
         np_imgs = np.concatenate(multiview_images.cpu().numpy(), 1) # (256, 256*6==1536, 3)
         np_xyzs = np.concatenate(multiview_CCMs.cpu().numpy(), 1) # (256, 1536, 3)
         
@@ -2448,6 +2748,8 @@ class Zero123Plus_Diffusion_Model:
         num_inference_steps,
     ):
         
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         seed = int(seed)
@@ -2505,6 +2807,8 @@ class Load_InstantMesh_Reconstruction_Model:
     
     def load_LRM(self, model_name):
 
+        _load_generation_modules()
+        _load_mesh_core()
         from InstantMesh.utils.train_util import instantiate_from_config
 
         is_flexicubes = True if model_name.startswith('instant_mesh') else False
@@ -2556,6 +2860,8 @@ class InstantMesh_Reconstruction_Model:
     @torch.no_grad()
     def run_LRM(self, lrm_model, multiview_images, orbit_camera_poses, orbit_camera_fovy, texture_resolution):
 
+        _load_generation_modules()
+        _load_mesh_core()
         images = multiview_images.permute(0, 3, 1, 2).unsqueeze(0).to(DEVICE)   # [N, H, W, 3] -> [1, N, 3, H, W]
         images = v2.functional.resize(images, 320, interpolation=3, antialias=True).clamp(0, 1)
 
@@ -2630,6 +2936,8 @@ class Era3D_MVDiffusion_Model:
         eta,
         radius,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         cfg = load_config_era3d(self.config_path_abs)
         
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
@@ -2727,6 +3035,9 @@ class Instant_NGP:
         background_color,
         force_cuda_rast
     ):
+        _load_generation_modules()
+        _load_mesh_core()
+        _load_mesh_utils()
         with torch.inference_mode(False):
             
             ngp = InstantNGP(training_resolution).to(DEVICE)
@@ -2806,6 +3117,8 @@ class FlexiCubes_MVS:
         reference_normal_maps=None
     ):
         
+        _load_generation_modules()
+        _load_mesh_core()
         with torch.inference_mode(False):
             
             fc_trainer = FlexiCubesTrainer(
@@ -2859,6 +3172,8 @@ class Load_Unique3D_Custom_UNet:
     
     def load_diffusers_unet(self, pipe, config_name):
 
+        _load_generation_modules()
+        _load_mesh_core()
         from Unique3D.custum_3d_diffusion.trainings.config_classes import ExprimentConfig
         from Unique3D.custum_3d_diffusion.custum_modules.unifield_processor import AttnConfig, ConfigurableUNet2DConditionModel
         from Unique3D.custum_3d_diffusion.trainings.utils import load_config
@@ -2924,6 +3239,8 @@ class Unique3D_MVDiffusion_Model:
         radius,
         preprocess_images,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         from Unique3D.scripts.utils import simple_image_preprocess
 
         pil_image_list = torch_imgs_to_pils(reference_image)
@@ -2976,6 +3293,8 @@ class Fast_Normal_Maps_To_Mesh:
     CATEGORY = "Comfy3D/Algorithm"
 
     def run_fast_recon(self, front_side_back_normal_maps, front_side_back_normal_masks):
+        _load_generation_modules()
+        _load_mesh_core()
         pil_normal_list = torch_imgs_to_pils(front_side_back_normal_maps, front_side_back_normal_masks)
         meshes = fast_geo(pil_normal_list[0], pil_normal_list[2], pil_normal_list[1])
         vertices, faces, _ = from_py3d_mesh(meshes)
@@ -3028,6 +3347,8 @@ class ExplicitTarget_Mesh_Optimization:
     ):
         #TODO For now only support four orthographic view with elevation equals zero
         #azimuths, elevations, radius = normal_orbit_camera_poses[0], normal_orbit_camera_poses[1], normal_orbit_camera_poses[2]
+        _load_generation_modules()
+        _load_mesh_core()
         pil_normal_list = torch_imgs_to_pils(normal_maps, normal_masks)
         normal_stg1 = [img.resize((coarse_reconstruct_resolution, coarse_reconstruct_resolution)) for img in pil_normal_list]
         with torch.inference_mode(False):
@@ -3086,6 +3407,8 @@ class ExplicitTarget_Color_Projection:
         texture_type,
         reference_orbit_camera_poses=None,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         pil_image_list = torch_imgs_to_pils(reference_images, reference_masks)
 
         meshes = to_py3d_mesh(mesh.v, mesh.f)
@@ -3156,6 +3479,7 @@ class Convert_Vertex_Color_To_Texture:
     
     def run_convert_func(self, mesh, texture_resolution, batch_size):
         
+        _load_mesh_utils()
         if mesh.vc is not None:
             albedo_img, _ = interpolate_texture_map_attr(mesh, texture_resolution, batch_size, interpolate_color=True)
             mesh.albedo = troch_image_dilate(albedo_img)
@@ -3190,6 +3514,8 @@ class Load_CharacterGen_MVDiffusion_Model:
     
     def load_model(self, force_download):
         # Download checkpoints
+        _load_generation_modules()
+        _load_mesh_core()
         snapshot_download(repo_id=self.default_repo_id, local_dir=self.checkpoints_dir_abs, force_download=force_download, repo_type="model", ignore_patterns=HF_DOWNLOAD_IGNORE)
         # Load pre-trained models
         character_mv_gen_pipe = Inference2D_API(checkpoint_root_path=self.checkpoints_dir_abs, **OmegaConf.load(self.config_root_path_abs))
@@ -3249,6 +3575,8 @@ class CharacterGen_MVDiffusion_Model:
         prompt_neg,
         radius
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         multiview_images = character_mv_gen_pipe.inference(
@@ -3289,6 +3617,8 @@ class Load_CharacterGen_Reconstruction_Model:
     
     def load_model(self, force_download):
         # Download checkpoints
+        _load_generation_modules()
+        _load_mesh_core()
         snapshot_download(repo_id=self.default_repo_id, local_dir=self.checkpoints_dir_abs, force_download=force_download, repo_type="model", ignore_patterns=HF_DOWNLOAD_IGNORE)
         # Load pre-trained models
         character_lrm_pipe = Inference3D_API(checkpoint_root_path=self.checkpoints_dir_abs, cfg=load_config_cg3d(self.config_root_path_abs))
@@ -3319,6 +3649,8 @@ class CharacterGen_Reconstruction_Model:
     
     @torch.no_grad()
     def run_LRM(self, character_lrm_pipe, multiview_images, multiview_masks):
+        _load_generation_modules()
+        _load_mesh_core()
         pil_mv_image_list = torch_imgs_to_pils(multiview_images, multiview_masks, alpha_min=0.2)
         
         vertices, faces = character_lrm_pipe.inference(pil_mv_image_list)
@@ -3359,6 +3691,8 @@ class Load_Craftsman_Shape_Diffusion_Model:
     CATEGORY = "Comfy3D/Import|Export"
     
     def load_model(self, model_name):
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_path = resume_or_download_model_from_hf(self.checkpoints_dir_abs, self.default_repo_id, model_name, self.__class__.__name__)
         
         cfg: ExperimentConfigCraftsman
@@ -3400,6 +3734,8 @@ class Craftsman_Shape_Diffusion_Model:
     
     @torch.no_grad()
     def run_model(self, craftsman_model, multiview_images, seed, guidance_scale, num_inference_steps, marching_cude_grids_resolution):
+        _load_generation_modules()
+        _load_mesh_core()
         pil_mv_image_list = torch_imgs_to_pils(multiview_images)
         
         sample_inputs = {"mvimages": [pil_mv_image_list]}   # view order: front, right, back, left
@@ -3515,6 +3851,8 @@ class Load_CRM_T2I_V2_Models:
     
     def load_CRM(self, crm_model_name, crm_config_path):
         
+        _load_generation_modules()
+        _load_mesh_core()
         from CRM_T2I_V2.imagedream.ldm.util import (
             instantiate_from_config,
             get_obj_from_str,
@@ -3595,6 +3933,8 @@ class CRM_T2I_V2_Models:
         num_inference_steps, 
     ):  
         # Convert tensores to pil images
+        _load_generation_modules()
+        _load_mesh_core()
         batch_reference_images = [CRMSamplerV2.process_pixel_img(img) for img in torch_imgs_to_pils(reference_image, reference_mask)]
         
         # Adapter conditioning.
@@ -3676,6 +4016,8 @@ class Load_CRM_T2I_V3_Models:
     
     def load_CRM(self, crm_model_name, crm_t2i_v3_model_name, crm_config_path, rank, use_dora):
         
+        _load_generation_modules()
+        _load_mesh_core()
         from CRM_T2I_V3.imagedream.ldm.util import (
             instantiate_from_config,
             get_obj_from_str,
@@ -3713,6 +4055,8 @@ class Load_CRM_T2I_V3_Models:
         return (t2iadapter_v2, crm_mvdiffusion_sampler_v3, )
     
     def inject_lora(self, mvdiffusion_model, rank=64, use_dora=False):
+        _load_generation_modules()
+        _load_mesh_core()
         from peft import LoraConfig, inject_adapter_in_model
         # Add new LoRA weights to the original attention layers
         unet_lora_config = LoraConfig(
@@ -3782,6 +4126,8 @@ class CRM_T2I_V3_Models:
         num_inference_steps, 
     ):  
         # Convert tensores to pil images
+        _load_generation_modules()
+        _load_mesh_core()
         batch_reference_images = [CRMSamplerV3.process_pixel_img(img) for img in torch_imgs_to_pils(reference_image, reference_mask)]
         
         # Adapter conditioning.
@@ -3866,6 +4212,8 @@ class Hunyuan3D_V1_MVDiffusion_Model:
         mv_guidance_scale, 
         num_inference_steps, 
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         generator = torch.Generator(device=mvdiffusion_pipe.device).manual_seed(seed)
@@ -3906,6 +4254,8 @@ class Load_Hunyuan3D_V1_Reconstruction_Model:
     
     def load_model(self, force_download, use_lite):
         # Download checkpoints
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_download_dir = os.path.join(CKPT_DIFFUSERS_PATH, self.default_repo_id)
         snapshot_download(repo_id=self.default_repo_id, local_dir=ckpt_download_dir, force_download=force_download, repo_type="model", ignore_patterns=HF_DOWNLOAD_IGNORE)
         # Load pre-trained models
@@ -3941,6 +4291,8 @@ class Hunyuan3D_V1_Reconstruction_Model:
     
     @torch.no_grad()
     def run_model(self, hunyuan3d_v1_reconstruction_model, multiview_image_grid, condition_image, seed, target_face_count):
+        _load_generation_modules()
+        _load_mesh_core()
         mv_grid_pil = torch_imgs_to_pils(multiview_image_grid)[0]
         condition_pil = torch_imgs_to_pils(condition_image)[0]
         
@@ -3993,6 +4345,8 @@ class Hunyuan3D_V2_DiT_Flow_Matching_Model:
         num_inference_steps,
         octree_resolution,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         generator = torch.Generator(device=hunyuan3d_v2_i23d_pipe.device).manual_seed(seed)
@@ -4043,6 +4397,8 @@ class Hunyuan3D_V2_Paint_Model:
         reference_mask,  # [1, H, W]
         mesh,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         v_np = mesh.v.detach().cpu().numpy()
@@ -4078,6 +4434,8 @@ class Load_Trellis_Structured_3D_Latents_Models:
     
     def load_pipe(self, repo_id):
         
+        _load_generation_modules()
+        _load_mesh_core()
         pipe = TrellisImageTo3DPipeline.from_pretrained(repo_id)
         pipe.to(DEVICE)
         
@@ -4122,6 +4480,8 @@ class Trellis_Structured_3D_Latents_Models:
         structured_latent_guidance_scale,
         structured_latent_sample_steps,
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image, reference_mask)[0]
 
         outputs = trellis_pipe.run(
@@ -4194,6 +4554,8 @@ class TripoSG_I23D_Model:
         dense_octree_depth,
     ):
         
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(reference_image)[0]
         
         with torch.inference_mode(False):
@@ -4261,6 +4623,8 @@ class TripoSG_Scribble_Model:
         dense_octree_depth,
     ):
         
+        _load_generation_modules()
+        _load_mesh_core()
         single_image = torch_imgs_to_pils(scribble_image)[0]
         
         outputs = tsg_scribble_pipe(
@@ -4314,6 +4678,8 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
 
     @staticmethod
     def _ensure_weights(repo: str, subfolder: str, use_safetensors: bool):
+        _load_generation_modules()
+        _load_mesh_core()
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_V2_ShapeGen_Pipeline._REPO_ID_BASE}/{repo}")
         ckpt_file = "model.fp16.safetensors" if use_safetensors else "model.fp16.ckpt"
         ckpt_path = os.path.join(base_dir, subfolder, ckpt_file)
@@ -4329,6 +4695,8 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
 
     @staticmethod
     def _build_pipe(repo: str, subfolder: str, use_safetensors: bool, flash_vdm: bool):
+        _load_generation_modules()
+        _load_mesh_core()
         Load_Hunyuan3D_V2_ShapeGen_Pipeline._ensure_weights(repo, subfolder, use_safetensors)
 
         model_dir = os.path.join(CKPT_DIFFUSERS_PATH,
@@ -4356,6 +4724,8 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
         return pipe.to("cuda", torch.float16)
 
     def load(self, generation_mode, weights_format, flash_vdm):
+        _load_generation_modules()
+        _load_mesh_core()
         repo, subfolder, def_steps = self._MODES[generation_mode]
         use_safe = (weights_format == "safetensors")
         pipe = self._build_pipe(repo, subfolder, use_safe, flash_vdm)
@@ -4380,6 +4750,8 @@ class Load_Hunyuan3D_V2_TexGen_Pipeline:
         }}
 
     def _download_required_weights(self, repo_id, subfolder):
+        _load_generation_modules()
+        _load_mesh_core()
         ckpt_download_dir = os.path.join(CKPT_DIFFUSERS_PATH, repo_id)
         os.makedirs(ckpt_download_dir, exist_ok=True)
 
@@ -4394,6 +4766,8 @@ class Load_Hunyuan3D_V2_TexGen_Pipeline:
             )
 
     def load(self, generation_mode):
+        _load_generation_modules()
+        _load_mesh_core()
         repo_id, subfolder = self.MODEL2REPO[generation_mode]
 
         self._download_required_weights(repo_id, subfolder)
@@ -4430,6 +4804,8 @@ class Hunyuan3D_V2_Paint_Model_Turbo_MV:
 
     @torch.no_grad()
     def run(self, hunyuan3d_v2_texgen_pipe, mesh, images):
+        _load_generation_modules()
+        _load_mesh_core()
         if not isinstance(images, list) or len(images) == 0:
             raise Exception("[Hunyuan3D_V2_Paint_Model_Turbo_MV] 'images' must be a non-empty list of PIL images")
 
@@ -4478,6 +4854,8 @@ class Multi_Background_Remover:
         image_left=None,
         image_right=None
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         rmbg = BackgroundRemover()
 
         mv_inputs = {
@@ -4540,6 +4918,8 @@ class Hunyuan3D_V2_ShapeGen_MV:
         num_inference_steps=5,
         octree_resolution=256
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         if not isinstance(images, list) or len(images) == 0:
             raise Exception("[Hunyuan3D_V2_ShapeGen_MV] 'images' must be a non-empty list of PIL images")
 
@@ -4585,6 +4965,7 @@ class Load_StableGen_Trellis_Pipeline:
 
     @classmethod
     def INPUT_TYPES(cls):
+        _load_generation_modules()
         available_attn, available_sparse = StableGenPipelineBuilder.get_available_backends()
 
         return {
@@ -4603,6 +4984,8 @@ class Load_StableGen_Trellis_Pipeline:
     def _build_pipe(cls, repo: str, dinov2_model: str, use_fp16: bool, attn_backend: str, 
                    sparse_backend: str, spconv_algo: str, smooth_k: bool):
         
+        _load_generation_modules()
+        _load_mesh_core()
         return StableGenPipelineBuilder.build_trellis_pipeline(
             repo=repo,
             dinov2_model=dinov2_model,
@@ -4615,6 +4998,8 @@ class Load_StableGen_Trellis_Pipeline:
         )
 
     def load(self, model_name, dinov2_model, use_fp16, attn_backend, sparse_backend, spconv_algo, smooth_k):
+        _load_generation_modules()
+        _load_mesh_core()
         repo, ss_steps, slat_steps = self._MODES[model_name]
         
         pipe = self.__class__._build_pipe(repo, dinov2_model, use_fp16, attn_backend, sparse_backend, spconv_algo, smooth_k)
@@ -4649,6 +5034,8 @@ class Load_StableGen_StableX_Pipeline:
 
     @classmethod
     def _build_pipe(cls, repo: str, use_fp16: bool):
+        _load_generation_modules()
+        _load_mesh_core()
         return StableGenPipelineBuilder.build_stablex_pipeline(
             repo=repo,
             use_fp16=use_fp16,
@@ -4656,6 +5043,8 @@ class Load_StableGen_StableX_Pipeline:
         )
 
     def load(self, model_name, use_fp16):
+        _load_generation_modules()
+        _load_mesh_core()
         repo = self._MODES[model_name]
         pipe = self.__class__._build_pipe(repo, use_fp16)
         return (pipe,)
@@ -4700,6 +5089,8 @@ class StableGen_Trellis_Image_To_3D:
         slat_sampling_steps=12,
         mesh_simplify=0.95
     ):
+        _load_generation_modules()
+        _load_mesh_core()
         if isinstance(images, torch.Tensor):
             images = torch_imgs_to_pils(images)
         
@@ -4791,6 +5182,8 @@ class StableGen_StableX_Process_Image:
 
     @torch.no_grad()
     def run(self, stablex_pipe, image, processing_resolution=2048, controlnet_strength=1.0, seed=42):
+        _load_generation_modules()
+        _load_mesh_core()
         if image.dim() == 4:
             image = image.squeeze(0)
         
@@ -4847,6 +5240,8 @@ class Load_MVAdapter_IG2MV_Pipeline:
     def load(cls, base_model, vae_model, adapter_path, scheduler, num_views, 
             use_fp16, use_mmgp, lora_model=""):
         
+        _load_generation_modules()
+        _load_mesh_core()
         dtype = torch.float16 if use_fp16 else torch.float32
         vae_model = None if vae_model == "None" else vae_model
         lora_model = None if not lora_model else lora_model
@@ -4903,6 +5298,8 @@ class MVAdapter_IG2MV:
             num_inference_steps, guidance_scale, reference_conditioning_scale,
             height, width, seed, remove_background, lora_scale=1.0):
         
+        _load_generation_modules()
+        _load_mesh_core()
         if isinstance(reference_image, torch.Tensor):
             reference_images = torch_imgs_to_pils(reference_image)
             reference_image = reference_images[0]
@@ -4963,6 +5360,8 @@ class Load_MVAdapter_TG2MV_Pipeline:
     def load(cls, base_model, vae_model, adapter_path, scheduler, num_views, 
              use_fp16, use_mmgp, lora_model=""):
         
+        _load_generation_modules()
+        _load_mesh_core()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
@@ -5022,6 +5421,8 @@ class MVAdapter_TG2MV:
     def run(self, mvadapter_tg2mv_pipe, mesh_path, prompt, negative_prompt, num_views,
             num_inference_steps, guidance_scale, height, width, seed, lora_scale=1.0):
         
+        _load_generation_modules()
+        _load_mesh_core()
         if not mesh_path or not os.path.exists(mesh_path):
             raise ValueError(f"Mesh path does not exist: {mesh_path}")
         
@@ -5067,6 +5468,8 @@ class Load_MVAdapter_Texture_Pipeline:
     @classmethod
     def load(cls, upscaler_ckpt_name, inpaint_ckpt_name, use_mmgp, auto_download):
         
+        _load_generation_modules()
+        _load_mesh_core()
         upscaler_ckpt_path = os.path.join(cls.TEXTURE_CKPT_DIR, upscaler_ckpt_name) if upscaler_ckpt_name.strip() else None
         inpaint_ckpt_path = os.path.join(cls.TEXTURE_CKPT_DIR, inpaint_ckpt_name) if inpaint_ckpt_name.strip() else None
         
@@ -5126,6 +5529,8 @@ class MVAdapter_Texture_Projection:
             camera_elevation_deg="0,0,0,0,89.99,-89.99", 
             camera_distance=1.0, camera_ortho_scale=1.1, debug_mode=False):
         
+        _load_generation_modules()
+        _load_mesh_core()
         if isinstance(grid_image, torch.Tensor):
             pil_grid = torch_imgs_to_pils(grid_image)[0]  # Get first (and only) image
         else:
@@ -5227,6 +5632,8 @@ class Load_Hunyuan3D_21_ShapeGen_Pipeline:
 
     @staticmethod
     def _ensure_weights(subfolder: str):
+        _load_generation_modules()
+        _load_mesh_core()
         repo_id = f"{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_ID_BASE}/{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_NAME}"
         safe_repo_name = Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_NAME.replace(".", "_")
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_ID_BASE}/{safe_repo_name}")
@@ -5263,6 +5670,8 @@ class Load_Hunyuan3D_21_ShapeGen_Pipeline:
         return base_dir
 
     def load(self, subfolder):
+        _load_generation_modules()
+        _load_mesh_core()
         base_dir = self._ensure_weights(subfolder)
         
         pipeline = Hunyuan3DDiTFlowMatchingPipeline_2_1.from_pretrained(
@@ -5300,6 +5709,8 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
 
     @staticmethod 
     def _ensure_weights():
+        _load_generation_modules()
+        _load_mesh_core()
         repo_id = f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME}"
         safe_repo_name = Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME.replace(".", "_")
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{safe_repo_name}")
@@ -5338,6 +5749,8 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
 
     @staticmethod
     def _ensure_realesrgan():
+        _load_generation_modules()
+        _load_mesh_core()
         upscale_models_dir = os.path.join(ROOT_PATH, "..", "..", "models", "upscale_models")
         realesrgan_path = os.path.join(upscale_models_dir, "RealESRGAN_x4plus.pth")
         
@@ -5361,6 +5774,8 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
         return realesrgan_path
 
     def load(self, max_num_view, resolution, enable_mmgp):
+        _load_generation_modules()
+        _load_mesh_core()
         cache_key = (max_num_view, resolution, enable_mmgp)
 
         # Check cache first
@@ -5419,6 +5834,8 @@ class Hunyuan3D_21_ShapeGen:
 
     @torch.no_grad()
     def generate(self, shapegen_pipe, image, seed, steps, guidance_scale, octree_resolution, remove_background, auto_cleanup):
+        _load_generation_modules()
+        _load_mesh_core()
         pil_image = torch_imgs_to_pils(image)[0].convert("RGBA")
         
         if remove_background or pil_image.mode == "RGB":
@@ -5491,6 +5908,8 @@ class Hunyuan3D_21_TexGen:
 
     @torch.no_grad()
     def generate(self, texgen_pipe, mesh_path, image, create_pbr, use_remesh):
+        _load_generation_modules()
+        _load_mesh_core()
         if not mesh_path or not os.path.exists(mesh_path):
             raise Exception(f"Mesh file not found: {mesh_path}")
 
@@ -5607,6 +6026,8 @@ class Load_PartCrafter_Pipeline:
 
     @staticmethod
     def _ensure_weights():
+        _load_generation_modules()
+        _load_mesh_core()
         safe_repo_name = Load_PartCrafter_Pipeline._REPO_ID.replace("/", "_")
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, Load_PartCrafter_Pipeline._REPO_ID)
         
@@ -5639,6 +6060,8 @@ class Load_PartCrafter_Pipeline:
         return base_dir
 
     def load(self):
+        _load_generation_modules()
+        _load_mesh_core()
         base_dir = self._ensure_weights()
         
         pipeline = PartCrafterPipeline.from_pretrained(base_dir).to(DEVICE, WEIGHT_DTYPE)
@@ -5678,6 +6101,8 @@ class PartCrafter_Generate:
                  guidance_scale, max_num_expanded_coords, use_flash_decoder, remove_background, sampling_version):
         
         # Convert image
+        _load_generation_modules()
+        _load_mesh_core()
         pil_image = torch_imgs_to_pils(image)[0]
         
         # Remove background if needed
@@ -5810,6 +6235,8 @@ class Load_PartCrafter_Scene_Pipeline:
 
     @staticmethod
     def _ensure_weights():
+        _load_generation_modules()
+        _load_mesh_core()
         safe_repo_name = Load_PartCrafter_Scene_Pipeline._REPO_ID.replace("/", "_")
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, Load_PartCrafter_Scene_Pipeline._REPO_ID)
         
@@ -5843,6 +6270,8 @@ class Load_PartCrafter_Scene_Pipeline:
         return base_dir
 
     def load(self):
+        _load_generation_modules()
+        _load_mesh_core()
         base_dir = self._ensure_weights()
         
         pipeline = PartCrafterPipeline.from_pretrained(base_dir).to(DEVICE, WEIGHT_DTYPE)
@@ -5882,6 +6311,8 @@ class PartCrafter_Generate:
                  guidance_scale, max_num_expanded_coords, use_flash_decoder, remove_background, sampling_version):
         
         # Convert image
+        _load_generation_modules()
+        _load_mesh_core()
         pil_image = torch_imgs_to_pils(image)[0]
         
         # Remove background if needed
@@ -5994,4 +6425,3 @@ class PartCrafter_Generate:
         print(f"GLB mesh path for Preview_3DMesh: {relative_scene_path}")
         
         return (zip_path, relative_scene_path, processed_image_tensor)
-

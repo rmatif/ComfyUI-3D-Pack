@@ -22,9 +22,7 @@ if BACKEND == "xformers" and available_backends['xformers']:
 elif BACKEND == "flash_attn" and available_backends['flash_attn']:
     import flash_attn
 elif BACKEND == "sage" and available_backends['sage']:
-    import torch.nn.functional as F
     from sageattention import sageattn
-    F.scaled_dot_product_attention = sageattn
 elif BACKEND == "sdpa":
     from torch.nn.functional import scaled_dot_product_attention as sdpa
 elif BACKEND == "naive":

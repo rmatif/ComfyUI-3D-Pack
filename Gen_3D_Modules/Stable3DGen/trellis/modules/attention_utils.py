@@ -8,18 +8,19 @@ import math
 
 __all__ = ['SageAttention', 'sage_attention']
 
+_ORIGINAL_SDPA = F.scaled_dot_product_attention
+
 
 def enable_sage_attention():
     """
-    Enable SageAttention by replacing PyTorch's scaled_dot_product_attention
-    with sageattn from the SageAttention library.
+    Keep SageAttention opt-in for local Stable3DGen call sites without replacing
+    PyTorch's process-global scaled_dot_product_attention.
     """
-    F.scaled_dot_product_attention = sageattn
     return True
 
 def disable_sage_attention():
     """
     Restore PyTorch's original scaled_dot_product_attention function.
     """
-    F.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention
+    F.scaled_dot_product_attention = _ORIGINAL_SDPA
     return True
