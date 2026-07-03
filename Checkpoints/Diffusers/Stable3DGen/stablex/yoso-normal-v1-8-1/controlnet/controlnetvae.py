@@ -38,7 +38,10 @@ from diffusers.models.unets.unet_2d_blocks import (
     get_down_block,
 )
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
-from diffusers.models.controlnet import ControlNetOutput
+try:
+    from diffusers.models.controlnets.controlnet import ControlNetOutput
+except ImportError:
+    from diffusers.models.controlnet import ControlNetOutput
 from diffusers.models import ControlNetModel
 
 import pdb
@@ -245,6 +248,5 @@ class ControlNetVAEModel(ControlNetModel):
         return ControlNetOutput(
             down_block_res_samples=down_block_res_samples, mid_block_res_sample=mid_block_res_sample
         )
-
 
 

@@ -7,8 +7,10 @@ import importlib
 # Global variables
 BACKEND = 'spconv'  # Default sparse backend
 DEBUG = False       # Debug mode flag
-ATTN = 'xformers' # Default attention backend
+ATTN = None # Selected during module init from env or available backends
 SPCONV_ALGO = 'implicit_gemm'  # Default algorithm
+VALID_ATTN_BACKENDS = ['xformers', 'flash_attn', 'sage', 'sdpa', 'naive']
+DEFAULT_ATTN_BACKENDS = ['xformers', 'flash_attn', 'sage', 'sdpa', 'naive']
 
 def get_spconv_algo() -> str:
     """Get current spconv algorithm."""
@@ -78,6 +80,30 @@ def get_available_backends() -> Dict[str, bool]:
         'sdpa': True  # Always available with PyTorch >= 2.0
     }
 
+def _is_attention_backend_available(attn: str, available_backends: Dict[str, bool] = None) -> bool:
+    if attn not in VALID_ATTN_BACKENDS:
+        return False
+
+    if available_backends is None:
+        available_backends = get_available_backends()
+
+    return available_backends.get(attn, False)
+
+def _select_attention_backend(candidates: List[str] = None) -> str:
+    if candidates is None:
+        candidates = DEFAULT_ATTN_BACKENDS
+
+    available_backends = get_available_backends()
+    for candidate in candidates:
+        if _is_attention_backend_available(candidate, available_backends):
+            return candidate
+
+    return 'naive'
+
+def _sync_attention_env(attn: str):
+    os.environ['SPARSE_ATTN_BACKEND'] = attn
+    os.environ['ATTN_BACKEND'] = attn
+
 def get_available_sparse_backends() -> Dict[str, bool]:
     """Return dict of available sparse backends and their status"""
     return {
@@ -108,16 +134,23 @@ def __from_env():
     
     env_sparse_backend = os.environ.get('SPARSE_BACKEND')
     env_sparse_debug = os.environ.get('SPARSE_DEBUG')
-    env_sparse_attn = os.environ.get('SPARSE_ATTN_BACKEND')
+    env_sparse_attn = os.environ.get('SPARSE_ATTN_BACKEND') or os.environ.get('ATTN_BACKEND')
     
     if env_sparse_backend is not None and env_sparse_backend in ['spconv', 'torchsparse']:
         BACKEND = env_sparse_backend
     if env_sparse_debug is not None:
         DEBUG = env_sparse_debug == '1'
-    if env_sparse_attn is not None and env_sparse_attn in ['xformers', 'flash_attn', 'sage', 'sdpa', 'naive']:
-        ATTN = env_sparse_attn
-        os.environ['SPARSE_ATTN_BACKEND'] = env_sparse_attn
-        os.environ['ATTN_BACKEND'] = env_sparse_attn
+    if env_sparse_attn is not None:
+        env_sparse_attn = env_sparse_attn.lower().strip()
+        if _is_attention_backend_available(env_sparse_attn):
+            ATTN = env_sparse_attn
+        else:
+            logger.warning(f"Attention backend {env_sparse_attn} not available, selecting fallback")
+
+    if ATTN is None:
+        ATTN = _select_attention_backend()
+
+    _sync_attention_env(ATTN)
         
     logger.info(f"[SPARSE] Backend: {BACKEND}, Attention: {ATTN}")
 
@@ -182,37 +215,11 @@ def set_attn(attn: Literal['xformers', 'flash_attn', 'sage', 'sdpa', 'naive']) -
     attn = attn.lower().strip()
     logger.info(f"Setting attention backend to: {attn}")
 
-    if attn == 'xformers' and _try_import_xformers():
-        ATTN = 'xformers'
-        os.environ['SPARSE_ATTN_BACKEND'] = 'xformers'
-        os.environ['ATTN_BACKEND'] = 'xformers'
+    if _is_attention_backend_available(attn):
+        ATTN = attn
+        _sync_attention_env(attn)
         return True
         
-    elif attn == 'flash_attn' and _try_import_flash_attn():
-        ATTN = 'flash_attn'
-        os.environ['SPARSE_ATTN_BACKEND'] = 'flash_attn'
-        os.environ['ATTN_BACKEND'] = 'flash_attn'
-        return True
-        
-    elif attn == 'sage' and _try_import_sageattention():
-        ATTN = 'sage'
-        os.environ['SPARSE_ATTN_BACKEND'] = 'sage'
-        os.environ['ATTN_BACKEND'] = 'sage'
-        return True
-        
-    elif attn == 'sdpa':
-        ATTN = 'sdpa'
-        os.environ['SPARSE_ATTN_BACKEND'] = 'sdpa'
-        os.environ['ATTN_BACKEND'] = 'sdpa'
-        return True
-    
-    elif attn == 'naive':
-        ATTN = 'naive'
-        os.environ['SPARSE_ATTN_BACKEND'] = 'naive'
-        os.environ['ATTN_BACKEND'] = 'naive'
-        return True
-        
-
     logger.warning(f"Attention backend {attn} not available")
     return False
 

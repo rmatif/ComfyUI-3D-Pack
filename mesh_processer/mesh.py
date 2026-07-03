@@ -365,27 +365,87 @@ class Mesh:
         else:
             print(f"[load_trimesh] failed to load mesh, either path or given_mesh must be given")
             return None
-        
+
+        def image_to_rgb_array(image):
+            if image is None:
+                return None
+
+            if hasattr(image, "convert"):
+                image = image.convert("RGB")
+
+            texture = np.array(image)
+            if texture.ndim == 2:
+                texture = np.repeat(texture[..., None], 3, axis=-1)
+            elif texture.ndim == 3:
+                if texture.shape[-1] == 1:
+                    texture = np.repeat(texture, 3, axis=-1)
+                elif texture.shape[-1] >= 3:
+                    texture = texture[..., :3]
+                else:
+                    return None
+            else:
+                return None
+
+            texture = texture.astype(np.float32)
+            if texture.max(initial=0) > 1.0:
+                texture /= 255.0
+            return texture
+
+        def color_to_albedo(color):
+            if color is None:
+                return None
+
+            color = np.array(color, dtype=np.float32).reshape(-1)
+            if color.shape[0] < 3:
+                return None
+
+            color = color[:3]
+            if color.max(initial=0) > 1.0:
+                color /= 255.0
+
+            return np.ones((16, 16, 3), dtype=np.float32) * color
+
+        def material_to_albedo(material):
+            if material is None:
+                return None
+
+            texture = None
+            if isinstance(material, trimesh.visual.material.PBRMaterial):
+                texture = image_to_rgb_array(material.baseColorTexture)
+                if material.metallicRoughnessTexture is not None:
+                    metallicRoughness = image_to_rgb_array(material.metallicRoughnessTexture)
+                    if metallicRoughness is not None:
+                        mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
+                if texture is None:
+                    texture = color_to_albedo(getattr(material, "baseColorFactor", None))
+            elif isinstance(material, trimesh.visual.material.SimpleMaterial):
+                pbr_material = material.to_pbr()
+                texture = image_to_rgb_array(pbr_material.baseColorTexture)
+                if texture is None:
+                    texture = color_to_albedo(getattr(material, "main_color", None))
+                if texture is None:
+                    texture = color_to_albedo(getattr(pbr_material, "baseColorFactor", None))
+            else:
+                texture = color_to_albedo(getattr(material, "main_color", None))
+                if texture is None:
+                    texture = color_to_albedo(getattr(material, "baseColorFactor", None))
+
+            return texture
+
         should_create_empty_albedo = False
         if _mesh.visual.kind == 'vertex':
             vertex_colors = _mesh.visual.vertex_colors
             vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
             mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
+            mesh.albedo = torch.tensor(
+                np.ones((16, 16, 3), dtype=np.float32) * vertex_colors.mean(axis=0),
+                dtype=torch.float32,
+                device=device
+            )
             print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
         elif _mesh.visual.kind == 'texture':
-            _material = _mesh.visual.material
-            if isinstance(_material, trimesh.visual.material.PBRMaterial):
-                texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
-                # load metallicRoughness if present
-                if _material.metallicRoughnessTexture is not None:
-                    metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
-                    mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
-            elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-                texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
-            else:
-                raise NotImplementedError(f"material type {type(_material)} not supported!")
-            
-            if texture.ndim ==3:
+            texture = material_to_albedo(_mesh.visual.material)
+            if texture is not None and texture.ndim == 3:
                 mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
                 print(f"[load_trimesh] loaded albedo texture: {texture.shape}")
             else:

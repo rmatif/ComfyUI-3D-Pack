@@ -1,14 +1,22 @@
 from typing import *
 import importlib
-from trellis.backend_config import get_sparse_backend, get_attention_backend, get_debug_mode
+import logging
+from trellis.backend_config import get_sparse_backend, get_attention_backend, get_debug_mode, get_available_backends
+
+logger = logging.getLogger(__name__)
 
 BACKEND = get_sparse_backend()
 DEBUG = get_debug_mode()
 ATTN = get_attention_backend()
 
 if ATTN not in ['xformers', 'flash_attn']:
-    logger.warning(f"Attention backend {ATTN} not supported for sparse attention. Only 'xformers' and 'flash_attn' are available. Defaulting to 'flash_attn'")
-    ATTN = 'flash_attn'
+    available_backends = get_available_backends()
+    fallback = next((backend for backend in ['flash_attn', 'xformers'] if available_backends[backend]), None)
+    if fallback is not None:
+        logger.warning(f"Attention backend {ATTN} not supported for sparse attention. Defaulting to {fallback}")
+        ATTN = fallback
+    else:
+        logger.warning(f"Attention backend {ATTN} not supported for sparse attention, and neither xformers nor flash-attn is installed")
 
 __attributes = {
     'SparseTensor': 'basic',

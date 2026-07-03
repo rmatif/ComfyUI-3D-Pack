@@ -4,7 +4,7 @@ from typing import Callable, List, Optional, Union, Dict, Any
 import PIL
 import torch
 from packaging import version
-from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection, CLIPFeatureExtractor, CLIPTokenizer, CLIPTextModel
+from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection, CLIPTokenizer, CLIPTextModel
 from diffusers.utils.import_utils import is_accelerate_available
 from diffusers.configuration_utils import FrozenDict
 from diffusers.image_processor import VaeImageProcessor
@@ -29,7 +29,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline):
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
 
     Args:
-        feature_extractor ([`CLIPFeatureExtractor`]):
+        feature_extractor ([`CLIPImageProcessor`]):
             Feature extractor for image pre-processing before being encoded.
         image_encoder ([`CLIPVisionModelWithProjection`]):
             CLIP vision model for encoding images.
@@ -51,7 +51,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
     """
     # image encoding components
-    feature_extractor: CLIPFeatureExtractor
+    feature_extractor: CLIPImageProcessor
     image_encoder: CLIPVisionModelWithProjection
     # image noising components
     image_normalizer: StableUnCLIPImageNormalizer
@@ -66,7 +66,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline):
     def __init__(
         self,
         # image encoding components
-        feature_extractor: CLIPFeatureExtractor,
+        feature_extractor: CLIPImageProcessor,
         image_encoder: CLIPVisionModelWithProjection,
         # image noising components
         image_normalizer: StableUnCLIPImageNormalizer,

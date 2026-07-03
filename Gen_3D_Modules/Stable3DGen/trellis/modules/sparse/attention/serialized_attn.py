@@ -19,9 +19,12 @@ DEBUG = get_debug_mode()
 # Get available backends and import if active
 available_backends = get_available_backends()
 
-if ATTN not in ['xformers', 'flash_attn']:
-    logger.warning(f"Attention backend {ATTN} not supported for sparse attention. Only 'xformers' and 'flash_attn' are available. Defaulting to 'flash_attn'")
-    ATTN = 'flash_attn'
+if ATTN not in ['xformers', 'flash_attn'] or not available_backends[ATTN]:
+    fallback = next((backend for backend in ['flash_attn', 'xformers'] if available_backends[backend]), None)
+    if fallback is None:
+        raise ImportError(f"Sparse attention requires xformers or flash-attn; configured backend {ATTN} is unavailable")
+    logger.warning(f"Attention backend {ATTN} not available for sparse attention. Defaulting to {fallback}")
+    ATTN = fallback
 
 if ATTN == 'xformers' and available_backends['xformers']:
     import xformers.ops as xops

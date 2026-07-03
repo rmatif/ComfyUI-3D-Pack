@@ -16,7 +16,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from diffusers.models.controlnet import ControlNetOutput
+try:
+    from diffusers.models.controlnets.controlnet import ControlNetOutput
+except ImportError:
+    from diffusers.models.controlnet import ControlNetOutput
 from diffusers.models import ControlNetModel
 
 

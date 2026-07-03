@@ -136,6 +136,12 @@ def scaled_dot_product_attention(*args, **kwargs):
             out = flash_attn.flash_attn_kvpacked_func(q, kv)
         elif num_all_args == 3:
             out = flash_attn.flash_attn_func(q, k, v)
+    elif BACKEND == 'sage':
+        if num_all_args == 1:
+            q, k, v = qkv.unbind(dim=2)
+        elif num_all_args == 2:
+            k, v = kv.unbind(dim=2)
+        out = sageattn(q, k, v, tensor_layout="NHD")
     elif BACKEND == 'sdpa':
         if num_all_args == 1:
             q, k, v = qkv.unbind(dim=2)
