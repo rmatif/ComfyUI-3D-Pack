@@ -31,7 +31,16 @@ def transform_pos(mtx, pos, keepdim=False):
         return torch.matmul(posw, t_mtx.t())[None, ...]
 
 
+def _to_numpy(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy()
+    return value
+
+
 def get_mv_matrix(elev, azim, camera_distance, center=None):
+    elev = float(_to_numpy(elev))
+    azim = float(_to_numpy(azim))
+    camera_distance = float(_to_numpy(camera_distance))
     elev = -elev
     azim += 90
 
@@ -49,7 +58,7 @@ def get_mv_matrix(elev, azim, camera_distance, center=None):
     if center is None:
         center = np.array([0, 0, 0])
     else:
-        center = np.array(center)
+        center = np.array(_to_numpy(center))
 
     lookat = center - camera_position
     lookat = lookat / np.linalg.norm(lookat)

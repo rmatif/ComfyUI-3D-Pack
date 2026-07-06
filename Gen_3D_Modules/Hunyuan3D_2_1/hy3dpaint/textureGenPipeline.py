@@ -174,11 +174,11 @@ class Hunyuan3DPaintPipeline:
         texture, mask = self.view_processor.bake_from_multiview(
             enhance_images["albedo"], selected_camera_elevs, selected_camera_azims, selected_view_weights
         )
-        mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+        mask_np = (mask.squeeze(-1).detach().cpu().numpy() * 255).astype(np.uint8)
         texture_mr, mask_mr = self.view_processor.bake_from_multiview(
             enhance_images["mr"], selected_camera_elevs, selected_camera_azims, selected_view_weights
         )
-        mask_mr_np = (mask_mr.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+        mask_mr_np = (mask_mr.squeeze(-1).detach().cpu().numpy() * 255).astype(np.uint8)
 
         ##########  inpaint  ###########
         texture = self.view_processor.texture_inpaint(texture, mask_np)

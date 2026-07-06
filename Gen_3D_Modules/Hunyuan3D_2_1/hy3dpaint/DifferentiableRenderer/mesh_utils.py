@@ -17,6 +17,7 @@ import cv2
 # import bpy  # Blender Python API - commented out
 import math
 import numpy as np
+import torch
 from io import StringIO
 from typing import Optional, Tuple, Dict, Any
 import pymeshlab as pml
@@ -36,6 +37,8 @@ def _convert_to_numpy(data: Any, dtype: np.dtype) -> Optional[np.ndarray]:
     """Convert data to numpy array with specified dtype, handling None values."""
     if data is None:
         return None
+    if isinstance(data, torch.Tensor):
+        data = data.detach().cpu().numpy()
     return np.asarray(data, dtype=dtype)
 
 

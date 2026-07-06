@@ -43,6 +43,12 @@ from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
 
 from diffusers.utils import deprecate
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
+
+
+def _to_numpy(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy()
+    return np.array(value)
 from diffusers.image_processor import PipelineImageInput
 from diffusers.pipelines.stable_diffusion.pipeline_output import StableDiffusionPipelineOutput
 from .unet.modules import UNet2p5DConditionModel
@@ -217,7 +223,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             images = [images]
 
         images = [to_rgb_image(image) for image in images]
-        images_vae = [torch.tensor(np.array(image) / 255.0) for image in images]
+        images_vae = [torch.tensor(_to_numpy(image) / 255.0) for image in images]
         images_vae = [image_vae.unsqueeze(0).permute(0, 3, 1, 2).unsqueeze(0) for image_vae in images_vae]
         images_vae = torch.cat(images_vae, dim=1)
         images_vae = images_vae.to(device=self.vae.device, dtype=self.unet.dtype)
@@ -676,11 +682,14 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                             return -float(azim) / 90.0 + 5.0
 
                     view_scale_tensor = (
-                        torch.from_numpy(np.asarray([cam_mapping(azim) for azim in camera_azims]))
+                        torch.as_tensor(
+                            [cam_mapping(azim) for azim in camera_azims],
+                            dtype=noise_pred_uncond.dtype,
+                            device=noise_pred_uncond.device,
+                        )
                         .unsqueeze(0)
                         .repeat(n_pbr, 1)
-                        .view(-1)
-                        .to(noise_pred_uncond)[:, None, None, None]
+                        .view(-1)[:, None, None, None]
                     )
                     noise_pred = noise_pred_uncond + self.guidance_scale * view_scale_tensor * (
                         noise_pred_ref - noise_pred_uncond

@@ -77,6 +77,8 @@ class HunyuanPaint(pl.LightningModule):
         self.pbr_settings = pbr_settings
 
         # init modules
+        stable_diffusion_config = dict(stable_diffusion_config)
+        stable_diffusion_config["trust_remote_code"] = True
         pipeline = DiffusionPipeline.from_pretrained(**stable_diffusion_config)
         pipeline.set_pbr_settings(self.pbr_settings)
         pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(

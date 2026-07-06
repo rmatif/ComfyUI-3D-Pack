@@ -2,10 +2,17 @@ import trimesh
 import pygltflib
 import numpy as np
 from PIL import Image
+import torch
 import base64
 import io
 import tempfile
 import os
+
+
+def _to_numpy(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy()
+    return np.array(value)
 
 
 def combine_metallic_roughness(metallic_path, roughness_path, output_path):
@@ -26,8 +33,8 @@ def combine_metallic_roughness(metallic_path, roughness_path, output_path):
     combined = Image.new("RGB", (width, height))
 
     # 转为numpy数组便于操作
-    metallic_array = np.array(metallic_img)
-    roughness_array = np.array(roughness_img)
+    metallic_array = _to_numpy(metallic_img)
+    roughness_array = _to_numpy(roughness_img)
 
     # 创建合并的数组 (R, G, B) = (AO, Roughness, Metallic)
     combined_array = np.zeros((height, width, 3), dtype=np.uint8)

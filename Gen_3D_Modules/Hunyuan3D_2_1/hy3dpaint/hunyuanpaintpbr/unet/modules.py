@@ -35,6 +35,12 @@ from .attn_processor import SelfAttnProcessor2_0, RefAttnProcessor2_0, PoseRoPEA
 from transformers import AutoImageProcessor, AutoModel
 
 
+def _to_numpy(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy()
+    return np.array(value)
+
+
 class Dino_v2(nn.Module):
 
     """Wrapper for DINOv2 vision transformer (frozen weights).
@@ -76,7 +82,7 @@ class Dino_v2(nn.Module):
             batch_size = 1
             dino_proceesed_images = self.dino_processor(images=images, return_tensors="pt").pixel_values
             dino_proceesed_images = torch.stack(
-                [torch.from_numpy(np.array(image)) for image in dino_proceesed_images], dim=0
+                [torch.from_numpy(_to_numpy(image)) for image in dino_proceesed_images], dim=0
             )
         dino_param = next(self.dino_v2.parameters())
         dino_proceesed_images = dino_proceesed_images.to(dino_param)

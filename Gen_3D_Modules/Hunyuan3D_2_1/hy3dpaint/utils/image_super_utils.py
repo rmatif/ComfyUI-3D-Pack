@@ -14,6 +14,13 @@
 
 import numpy as np
 from PIL import Image
+import torch
+
+
+def _to_numpy(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy()
+    return np.array(value)
 
 
 class imageSuperNet:
@@ -36,6 +43,6 @@ class imageSuperNet:
         self.upsampler = upsampler
 
     def __call__(self, image):
-        output, _ = self.upsampler.enhance(np.array(image))
+        output, _ = self.upsampler.enhance(_to_numpy(image))
         output = Image.fromarray(output)
         return output

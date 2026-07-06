@@ -4690,7 +4690,8 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
                 repo_type="model",
                 local_dir=base_dir,
                 resume_download=True,
-                ignore_patterns = HF_DOWNLOAD_IGNORE
+                allow_patterns=[f"{subfolder}/config.yaml", f"{subfolder}/{ckpt_file}"],
+                ignore_patterns=HF_DOWNLOAD_IGNORE
             )
 
     @staticmethod
@@ -4762,6 +4763,7 @@ class Load_Hunyuan3D_V2_TexGen_Pipeline:
                 local_dir=ckpt_download_dir,
                 repo_type="model",
                 force_download=False,
+                allow_patterns=[f"{folder}/**"],
                 ignore_patterns=HF_DOWNLOAD_IGNORE
             )
 

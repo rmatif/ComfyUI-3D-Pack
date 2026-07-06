@@ -35,8 +35,13 @@ except:
 
 try:
     from .mesh_inpaint_processor import meshVerticeInpaint  # , meshVerticeColor
-except:
-    print("InPaint Function CAN NOT BE Imported!!!")
+except ImportError:
+    try:
+        from .mesh_inpaint_processor_fallback import meshVerticeInpaint
+        print("[WARNING] Using Python fallback mesh_inpaint_processor (slower)")
+    except ImportError:
+        meshVerticeInpaint = None
+        print("InPaint Function CAN NOT BE Imported!!!")
 
 
 class RenderMode(Enum):
@@ -265,12 +270,16 @@ def mipmap_linear_grid_put_2d(H, W, coords, values, min_resolution=128, return_c
 
 # ============ Core utility functions for reducing duplication ============
 
+def _tensor_to_numpy(value: torch.Tensor) -> np.ndarray:
+    return value.detach().cpu().numpy()
+
+
 def _normalize_image_input(image: Union[np.ndarray, torch.Tensor, Image.Image]) -> Union[np.ndarray, torch.Tensor]:
     """Normalize image input to consistent format."""
     if isinstance(image, Image.Image):
         return np.array(image) / 255.0
     elif isinstance(image, torch.Tensor):
-        return image.cpu().numpy() if image.is_cuda else image
+        return _tensor_to_numpy(image)
     return image
 
 
@@ -281,7 +290,7 @@ def _convert_texture_format(tex: Union[np.ndarray, torch.Tensor, Image.Image],
         if isinstance(tex, np.ndarray):
             tex = Image.fromarray((tex * 255).astype(np.uint8))
         elif isinstance(tex, torch.Tensor):
-            tex_np = tex.cpu().numpy()
+            tex_np = _tensor_to_numpy(tex)
             tex = Image.fromarray((tex_np * 255).astype(np.uint8))
         
         tex = tex.resize(texture_size).convert("RGB")
@@ -296,9 +305,9 @@ def _convert_texture_format(tex: Union[np.ndarray, torch.Tensor, Image.Image],
 def _format_output(image: torch.Tensor, return_type: str) -> Union[torch.Tensor, np.ndarray, Image.Image]:
     """Convert output to requested format."""
     if return_type == ReturnType.NUMPY.value:
-        return image.cpu().numpy()
+        return _tensor_to_numpy(image)
     elif return_type == ReturnType.PIL.value:
-        img_np = image.cpu().numpy() * 255
+        img_np = _tensor_to_numpy(image) * 255
         return Image.fromarray(img_np.astype(np.uint8))
     return image
 
@@ -901,7 +910,7 @@ class MeshRender:
             sRGB corrected image in same format as input
         """
         if isinstance(image, Image.Image):
-            image_rgb = torch.tesnor(np.array(image) / 255.0).float().to(self.device)
+            image_rgb = torch.tensor(np.array(image) / 255.0).float().to(self.device)
         elif isinstance(image, np.ndarray):
             image_rgb = torch.tensor(image).float()
         else:
@@ -1000,6 +1009,8 @@ class MeshRender:
         # blue is front, red is left, green is top
         if isinstance(image, Image.Image):
             image = np.array(image)
+        elif isinstance(image, torch.Tensor):
+            image = _tensor_to_numpy(image)
         mask = (image == [255, 255, 255]).all(axis=-1)
 
         image = (image / 255.0) * 2.0 - 1.0
@@ -1247,10 +1258,11 @@ class MeshRender:
             cos_map[cos_map_uv < cos_thres] = 0
         elif method == "back_sample":
 
-            img_proj = torch.from_numpy(
-                np.array(((proj[0, 0], 0, 0, 0), (0, proj[1, 1], 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
-            ).to(self.tex_position)
-            w2c = torch.from_numpy(r_mv).to(self.tex_position)
+            proj_tensor = torch.as_tensor(proj, dtype=self.tex_position.dtype, device=self.tex_position.device)
+            img_proj = torch.eye(4, dtype=self.tex_position.dtype, device=self.tex_position.device)
+            img_proj[0, 0] = proj_tensor[0, 0]
+            img_proj[1, 1] = proj_tensor[1, 1]
+            w2c = torch.as_tensor(r_mv, dtype=self.tex_position.dtype, device=self.tex_position.device)
             v_proj = self.tex_position @ w2c.T @ img_proj
             inner_mask = (v_proj[:, 0] <= 1.0) & (v_proj[:, 0] >= -1.0) & (v_proj[:, 1] <= 1.0) & (v_proj[:, 1] >= -1.0)
             inner_valid_idx = torch.where(inner_mask)[0].long()
@@ -1394,16 +1406,16 @@ class MeshRender:
         """
 
         if isinstance(texture, torch.Tensor):
-            texture_np = texture.cpu().numpy()
+            texture_np = _tensor_to_numpy(texture)
         elif isinstance(texture, np.ndarray):
             texture_np = texture
         elif isinstance(texture, Image.Image):
             texture_np = np.array(texture) / 255.0
 
         if isinstance(mask, torch.Tensor):
-            mask = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+            mask = (_tensor_to_numpy(mask.squeeze(-1)) * 255).astype(np.uint8)
 
-        if vertex_inpaint:
+        if vertex_inpaint and meshVerticeInpaint is not None:
             vtx_pos, pos_idx, vtx_uv, uv_idx = self.get_mesh()
             texture_np, mask = meshVerticeInpaint(texture_np, mask, vtx_pos, vtx_uv, pos_idx, uv_idx)
 
