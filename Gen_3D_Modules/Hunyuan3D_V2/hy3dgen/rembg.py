@@ -15,10 +15,23 @@
 from PIL import Image
 from rembg import remove, new_session
 import numpy as np
+import os
 
 
 class BackgroundRemover():
-    def __init__(self, model_name='u2net'):
+    def __init__(self, model_name='u2net', model_path=None):
+        if model_path:
+            model_path = os.path.abspath(os.path.expanduser(model_path))
+            if not os.path.isfile(model_path):
+                raise FileNotFoundError(f"rembg model file not found: {model_path}")
+            cache_dir = os.path.expanduser("~/.u2net")
+            os.makedirs(cache_dir, exist_ok=True)
+            cache_path = os.path.join(cache_dir, f"{model_name}.onnx")
+            if os.path.exists(cache_path) or os.path.islink(cache_path):
+                if os.path.realpath(cache_path) != os.path.realpath(model_path):
+                    os.unlink(cache_path)
+            if not os.path.exists(cache_path):
+                os.symlink(model_path, cache_path)
         self.session = new_session(model_name)
 
     def __call__(self, image: Image.Image):

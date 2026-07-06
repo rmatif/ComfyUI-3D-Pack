@@ -109,6 +109,49 @@ _GAUSSIAN_SPLATTING_LOADED = False
 _GENERATION_MODULES_LOADED = False
 
 
+def _optional_abs_path(path):
+    if path is None:
+        return None
+    path = str(path).strip()
+    if not path:
+        return None
+    path = os.path.expanduser(path)
+    if not os.path.isabs(path):
+        raise ValueError(f"Expected an absolute path, got: {path}")
+    path = os.path.abspath(path)
+    return path
+
+
+def _require_file(path, label):
+    path = _optional_abs_path(path)
+    if path is None or not os.path.isfile(path):
+        raise FileNotFoundError(f"{label} file not found: {path}")
+    return path
+
+
+def _require_dir(path, label):
+    path = _optional_abs_path(path)
+    if path is None or not os.path.isdir(path):
+        raise FileNotFoundError(f"{label} directory not found: {path}")
+    return path
+
+
+def _resolve_root_or_child(path, child_name, label):
+    root = _require_dir(path, label)
+    if os.path.basename(os.path.normpath(root)) == child_name:
+        return os.path.dirname(root), root
+    child = os.path.join(root, child_name)
+    if os.path.isdir(child):
+        return root, child
+    raise FileNotFoundError(f"{label} must be {child_name} or contain {child_name}: {root}")
+
+
+def _validate_required_files(root, required_files, label):
+    missing = [file_path for file_path in required_files if not os.path.isfile(os.path.join(root, file_path))]
+    if missing:
+        raise FileNotFoundError(f"{label} missing required files: {', '.join(missing)}")
+
+
 def _load_mesh_core():
     global _MESH_CORE_LOADED, PlyData, Mesh
     if _MESH_CORE_LOADED:
@@ -4673,6 +4716,9 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
                 "generation_mode": (list(cls._MODES.keys()),),
                 "weights_format" : (["safetensors", "ckpt"],),
                 "flash_vdm"      : ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "model_dir": ("STRING", {"default": ""}),
             }
         }
 
@@ -4695,16 +4741,28 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
             )
 
     @staticmethod
-    def _build_pipe(repo: str, subfolder: str, use_safetensors: bool, flash_vdm: bool):
+    def _resolve_model_dir(repo: str, subfolder: str, use_safetensors: bool, model_dir: str | None):
         _load_generation_modules()
         _load_mesh_core()
-        Load_Hunyuan3D_V2_ShapeGen_Pipeline._ensure_weights(repo, subfolder, use_safetensors)
+        model_dir = _optional_abs_path(model_dir)
+        if model_dir:
+            model_dir = _require_dir(model_dir, "Hunyuan3D V2 ShapeGen model")
+            ckpt_file = "model.fp16.safetensors" if use_safetensors else "model.fp16.ckpt"
+            _validate_required_files(model_dir, ["config.yaml", ckpt_file], "Hunyuan3D V2 ShapeGen model")
+            return model_dir
 
-        model_dir = os.path.join(CKPT_DIFFUSERS_PATH,
-                                 f"{Load_Hunyuan3D_V2_ShapeGen_Pipeline._REPO_ID_BASE}/{repo}",
-                                 subfolder)
+        Load_Hunyuan3D_V2_ShapeGen_Pipeline._ensure_weights(repo, subfolder, use_safetensors)
+        return os.path.join(CKPT_DIFFUSERS_PATH,
+                            f"{Load_Hunyuan3D_V2_ShapeGen_Pipeline._REPO_ID_BASE}/{repo}",
+                            subfolder)
+
+    @staticmethod
+    def _build_pipe(repo: str, subfolder: str, use_safetensors: bool, flash_vdm: bool, model_dir: str | None = None):
+        _load_generation_modules()
+        _load_mesh_core()
+        model_dir = Load_Hunyuan3D_V2_ShapeGen_Pipeline._resolve_model_dir(repo, subfolder, use_safetensors, model_dir)
         ckpt = os.path.join(model_dir, "model.fp16.safetensors" if use_safetensors else "model.fp16.ckpt")
-        cfg  = os.path.join(model_dir, "config.yaml")
+        cfg = os.path.join(model_dir, "config.yaml")
 
         pipe = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
             ckpt_path=ckpt,
@@ -4724,12 +4782,12 @@ class Load_Hunyuan3D_V2_ShapeGen_Pipeline:
 
         return pipe.to("cuda", torch.float16)
 
-    def load(self, generation_mode, weights_format, flash_vdm):
+    def load(self, generation_mode, weights_format, flash_vdm, model_dir=""):
         _load_generation_modules()
         _load_mesh_core()
         repo, subfolder, def_steps = self._MODES[generation_mode]
         use_safe = (weights_format == "safetensors")
-        pipe = self._build_pipe(repo, subfolder, use_safe, flash_vdm)
+        pipe = self._build_pipe(repo, subfolder, use_safe, flash_vdm, model_dir)
         pipe.num_inference_steps = def_steps
         return (pipe,)
     
@@ -4845,6 +4903,7 @@ class Multi_Background_Remover:
             "optional": {
                 "image_back": ("IMAGE",),
                 "image_left": ("IMAGE",),
+                "rembg_model_path": ("STRING", {"default": ""}),
             }
         }
 
@@ -4854,11 +4913,12 @@ class Multi_Background_Remover:
         image_front,
         image_back=None,
         image_left=None,
-        image_right=None
+        image_right=None,
+        rembg_model_path=""
     ):
         _load_generation_modules()
         _load_mesh_core()
-        rmbg = BackgroundRemover()
+        rmbg = BackgroundRemover(model_path=_optional_abs_path(rembg_model_path))
 
         mv_inputs = {
             k: v for k, v in {
@@ -5629,13 +5689,27 @@ class Load_Hunyuan3D_21_ShapeGen_Pipeline:
         return {
             "required": {
                 "subfolder": (["hunyuan3d-dit-v2-1"], {"default": "hunyuan3d-dit-v2-1"}),
+            },
+            "optional": {
+                "model_root": ("STRING", {"default": ""}),
             }
         }
 
     @staticmethod
-    def _ensure_weights(subfolder: str):
+    def _ensure_weights(subfolder: str, model_root: str | None = None):
         _load_generation_modules()
         _load_mesh_core()
+        model_root = _optional_abs_path(model_root)
+        if model_root:
+            base_dir = _require_dir(model_root, "Hunyuan3D-2.1 ShapeGen model root")
+            _validate_required_files(base_dir, [
+                f"{subfolder}/config.yaml",
+                f"{subfolder}/model.fp16.ckpt",
+                "hunyuan3d-vae-v2-1/config.yaml",
+                "hunyuan3d-vae-v2-1/model.fp16.ckpt",
+            ], "Hunyuan3D-2.1 ShapeGen model root")
+            return base_dir
+
         repo_id = f"{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_ID_BASE}/{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_NAME}"
         safe_repo_name = Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_NAME.replace(".", "_")
         base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_21_ShapeGen_Pipeline._REPO_ID_BASE}/{safe_repo_name}")
@@ -5671,10 +5745,10 @@ class Load_Hunyuan3D_21_ShapeGen_Pipeline:
         
         return base_dir
 
-    def load(self, subfolder):
+    def load(self, subfolder, model_root=""):
         _load_generation_modules()
         _load_mesh_core()
-        base_dir = self._ensure_weights(subfolder)
+        base_dir = self._ensure_weights(subfolder, model_root)
         
         pipeline = Hunyuan3DDiTFlowMatchingPipeline_2_1.from_pretrained(
             base_dir,
@@ -5706,17 +5780,18 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
                 "max_num_view": ("INT", {"default": 8, "min": 4, "max": 12}),
                 "resolution": ("INT", {"default": 768, "min": 512, "max": 1024, "step": 256}),
                 "enable_mmgp": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "texgen_root": ("STRING", {"default": ""}),
+                "dinov2_path": ("STRING", {"default": ""}),
+                "realesrgan_path": ("STRING", {"default": ""}),
             }
         }
 
     @staticmethod 
-    def _ensure_weights():
+    def _ensure_weights(texgen_root: str | None = None):
         _load_generation_modules()
         _load_mesh_core()
-        repo_id = f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME}"
-        safe_repo_name = Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME.replace(".", "_")
-        base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{safe_repo_name}")
-        
         target_folder = "hunyuan3d-paintpbr-v2-1"
         required_files = [
             f"{target_folder}/image_encoder/model.safetensors",
@@ -5724,6 +5799,16 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
             f"{target_folder}/unet/diffusion_pytorch_model.bin",
             f"{target_folder}/vae/diffusion_pytorch_model.bin"
         ]
+
+        texgen_root = _optional_abs_path(texgen_root)
+        if texgen_root:
+            base_dir, _ = _resolve_root_or_child(texgen_root, target_folder, "Hunyuan3D-2.1 TexGen model root")
+            _validate_required_files(base_dir, required_files, "Hunyuan3D-2.1 TexGen model root")
+            return base_dir, True
+
+        repo_id = f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME}"
+        safe_repo_name = Load_Hunyuan3D_21_TexGen_Pipeline._REPO_NAME.replace(".", "_")
+        base_dir = os.path.join(CKPT_DIFFUSERS_PATH, f"{Load_Hunyuan3D_21_TexGen_Pipeline._REPO_ID_BASE}/{safe_repo_name}")
         
         files_missing = []
         
@@ -5747,12 +5832,16 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
         else:
             print(f"Hunyuan3D-2.1 TexGen weights already loaded")
 
-        return base_dir
+        return base_dir, False
 
     @staticmethod
-    def _ensure_realesrgan():
+    def _ensure_realesrgan(realesrgan_path: str | None = None):
         _load_generation_modules()
         _load_mesh_core()
+        realesrgan_path = _optional_abs_path(realesrgan_path)
+        if realesrgan_path:
+            return _require_file(realesrgan_path, "RealESRGAN")
+
         upscale_models_dir = os.path.join(ROOT_PATH, "..", "..", "models", "upscale_models")
         realesrgan_path = os.path.join(upscale_models_dir, "RealESRGAN_x4plus.pth")
         
@@ -5775,22 +5864,32 @@ class Load_Hunyuan3D_21_TexGen_Pipeline:
         
         return realesrgan_path
 
-    def load(self, max_num_view, resolution, enable_mmgp):
+    def load(self, max_num_view, resolution, enable_mmgp, texgen_root="", dinov2_path="", realesrgan_path=""):
         _load_generation_modules()
         _load_mesh_core()
-        cache_key = (max_num_view, resolution, enable_mmgp)
+        texgen_root = _optional_abs_path(texgen_root)
+        dinov2_path = _optional_abs_path(dinov2_path)
+        realesrgan_path = _optional_abs_path(realesrgan_path)
+        if dinov2_path:
+            _require_dir(dinov2_path, "DINOv2 model")
+
+        cache_key = (max_num_view, resolution, enable_mmgp, texgen_root or "", dinov2_path or "", realesrgan_path or "")
 
         # Check cache first
         if cache_key in self._cache:
             print(f"[TexGen-Loader] Using cached pipeline {cache_key}")
             return (self._cache[cache_key],)
 
-        base_dir = self._ensure_weights()
-        realesrgan_path = self._ensure_realesrgan()
+        base_dir, using_local_texgen = self._ensure_weights(texgen_root)
+        realesrgan_path = self._ensure_realesrgan(realesrgan_path)
         
         # Configure pipeline
         conf = Hunyuan3DPaintConfig_2_1(max_num_view=max_num_view, resolution=resolution)
         conf.realesrgan_ckpt_path = realesrgan_path
+        if using_local_texgen:
+            conf.multiview_pretrained_path = base_dir
+        if dinov2_path:
+            conf.dino_ckpt_path = dinov2_path
         conf.multiview_cfg_path = os.path.join(ROOT_PATH, "Gen_3D_Modules/Hunyuan3D_2_1/hy3dpaint/cfgs/hunyuan-paint-pbr.yaml")
         conf.custom_pipeline = os.path.join(ROOT_PATH, "Gen_3D_Modules/Hunyuan3D_2_1/hy3dpaint/hunyuanpaintpbr")
 
@@ -5831,17 +5930,20 @@ class Hunyuan3D_21_ShapeGen:
                 "octree_resolution": ("INT", {"default": 256, "min": 64, "max": 512}),
                 "remove_background": ("BOOLEAN", {"default": True}),
                 "auto_cleanup": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "rembg_model_path": ("STRING", {"default": ""}),
             }
         }
 
     @torch.no_grad()
-    def generate(self, shapegen_pipe, image, seed, steps, guidance_scale, octree_resolution, remove_background, auto_cleanup):
+    def generate(self, shapegen_pipe, image, seed, steps, guidance_scale, octree_resolution, remove_background, auto_cleanup, rembg_model_path=""):
         _load_generation_modules()
         _load_mesh_core()
         pil_image = torch_imgs_to_pils(image)[0].convert("RGBA")
         
         if remove_background or pil_image.mode == "RGB":
-            rmbg_worker = BackgroundRemover_2_1()
+            rmbg_worker = BackgroundRemover_2_1(model_path=_optional_abs_path(rembg_model_path))
             pil_image = rmbg_worker(pil_image.convert('RGB'))
             del rmbg_worker
 

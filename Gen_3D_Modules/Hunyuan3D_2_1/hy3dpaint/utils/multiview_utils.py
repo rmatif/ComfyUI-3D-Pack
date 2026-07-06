@@ -34,12 +34,21 @@ class multiviewDiffusionNet:
         self.cfg = cfg
         self.mode = self.cfg.model.params.stable_diffusion_config.custom_pipeline[2:]
 
-        model_path = huggingface_hub.snapshot_download(
-            repo_id=config.multiview_pretrained_path,
-            allow_patterns=["hunyuan3d-paintpbr-v2-1/*"],
-        )
-
-        model_path = os.path.join(model_path, "hunyuan3d-paintpbr-v2-1")
+        target_folder = "hunyuan3d-paintpbr-v2-1"
+        if os.path.isabs(config.multiview_pretrained_path):
+            root_path = os.path.abspath(os.path.expanduser(config.multiview_pretrained_path))
+            if os.path.basename(os.path.normpath(root_path)) == target_folder:
+                model_path = root_path
+            else:
+                model_path = os.path.join(root_path, target_folder)
+            if not os.path.isdir(model_path):
+                raise FileNotFoundError(f"Hunyuan3D TexGen model directory not found: {model_path}")
+        else:
+            model_path = huggingface_hub.snapshot_download(
+                repo_id=config.multiview_pretrained_path,
+                allow_patterns=[f"{target_folder}/*"],
+            )
+            model_path = os.path.join(model_path, target_folder)
         pipeline = DiffusionPipeline.from_pretrained(
             model_path,
             custom_pipeline=custom_pipeline, 
