@@ -7,10 +7,12 @@ import logging
 # ROOT_PATH = os.path.join(comfy_paths.get_folder_paths("custom_nodes")[0], "ComfyUI-3D-Pack")
 ROOT_PATH = os.path.dirname(os.path.realpath(__file__))
 MODULE_PATH = os.path.join(ROOT_PATH, "Gen_3D_Modules")
+HUNYUAN3D_V2_PATH = os.path.join(MODULE_PATH, "Hunyuan3D_V2")
 MV_ALGO_PATH = os.path.join(ROOT_PATH, "MVs_Algorithms")
 
 sys.path.append(ROOT_PATH)
 sys.path.append(MODULE_PATH)
+sys.path.append(HUNYUAN3D_V2_PATH)
 sys.path.append(MV_ALGO_PATH)
 
 import shutil
